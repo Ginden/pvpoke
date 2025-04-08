@@ -4,516 +4,542 @@ var InterfaceMaster = (function () {
     var instance;
 
     function createInstance() {
-
-
         var object = new interfaceObject();
 
-		function interfaceObject(){
+        function interfaceObject() {
+            var self = this;
+            var gm = GameMaster.getInstance();
+            var data;
+            var context = "train_rankings";
+            var mode = "pokemon";
+            var battle = new Battle();
+            var performerCSV = "";
+            var teamCSV = "";
 
-			var self = this;
-			var gm = GameMaster.getInstance();
-			var data;
-			var context = "train_rankings";
-			var mode = "pokemon";
-			var battle = new Battle();
-			var performerCSV = '';
-			var teamCSV = '';
+            this.init = function () {
+                if (!get) {
+                    this.loadRankings("1500", "all");
+                } else {
+                    this.loadGetData();
+                }
 
+                $(".format-select").on("change", selectFormat);
+                $("thead a").on("click", sortTable);
+                $("body").on("click", ".check", checkBox);
+                $("body").on("click", "a.usage-link", displayUsage);
+                $("body").on("change", ".modal .usage-compare-select", compareUsage);
 
-			this.init = function(){
+                window.addEventListener("popstate", function (e) {
+                    get = e.state;
+                    self.loadGetData();
+                });
+            };
 
-				if(! get){
-					this.loadRankings("1500","all");
-				} else{
-					this.loadGetData();
-				}
+            // Grabs ranking data from the Game Master
 
-				$(".format-select").on("change", selectFormat);
-				$("thead a").on("click", sortTable);
-				$("body").on("click", ".check", checkBox);
-				$("body").on("click", "a.usage-link", displayUsage);
-				$("body").on("change", ".modal .usage-compare-select", compareUsage);
+            this.loadRankings = function (league, cup) {
+                league = parseInt(league);
 
-				window.addEventListener('popstate', function(e) {
-					get = e.state;
-					self.loadGetData();
-				});
-			};
+                $(".train-table tbody").html("");
+                $(".loading").show();
 
-			// Grabs ranking data from the Game Master
+                battle.setCup(cup);
+                battle.setCP(league);
 
-			this.loadRankings = function(league, cup){
-				league = parseInt(league);
+                pokeSearch.setBattle(battle);
 
-				$(".train-table tbody").html('');
-				$(".loading").show();
-
-				battle.setCup(cup);
-				battle.setCP(league);
-
-				pokeSearch.setBattle(battle);
-
-				/* This timeout allows the interface to display the loading message before
+                /* This timeout allows the interface to display the loading message before
 				being thrown into the data loading loop */
 
-				setTimeout(function(){
-					gm.loadTrainData(self, league, cup);
-				}, 50);
+                setTimeout(function () {
+                    gm.loadTrainData(self, league, cup);
+                }, 50);
+            };
+
+            // Displays the grabbed data. Showoff.
+
+            this.displayRankingData = function (rankings) {
+                data = rankings;
+
+                $(".train-table tbody").html("");
+
+                // Initialize csv data
+
+                performerCSV = "Pokemon,Team Rating,Individual Rating,Usage\n";
+
+                // Display top performers rankings
+
+                for (var i = 0; i < rankings.performers.length; i++) {
+                    var r = rankings.performers[i];
+
+                    // For now, convert species name to a species ID
+                    var arr = r.pokemon.split(" ");
+                    var movesetStr = arr[arr.length - 1];
+                    var movesetArr = movesetStr.split(/\+|\//);
+                    var speciesId = r.pokemon.replace(" " + movesetStr, "");
+
+                    var pokemon = new Pokemon(speciesId, 0, battle);
+
+                    if (!pokemon.speciesId) {
+                        continue;
+                    }
+
+                    // Create a new row
+                    var $row = $(".train-table.performers thead tr.hide").clone();
+                    $row.removeClass("hide");
+                    $row.attr("data", speciesId);
+                    $row.find(".sprite-container").attr("type-1", pokemon.types[0]);
+                    $row.find(".sprite-container").attr("type-2", pokemon.types[0]);
+
+                    if (pokemon.types[1] != "none") {
+                        $row.find(".sprite-container").attr("type-2", pokemon.types[1]);
+                    }
+
+                    $row.find(".name").html(pokemon.speciesName);
+                    $row.find(".moves").html(r.pokemon.split(" ")[1]);
+                    $row.find(".individual-score").html(r.individualScore.toFixed(1) + "%");
+                    $row.find(".team-score .rating").html("<span></span>" + r.teamScore.toFixed(1));
+                    $row.find(".team-score .rating").addClass(battle.getRatingClass(r.teamScore));
+
+                    // Normalize rating so it has more visual effect
+                    var colorRating = 500 + (r.teamScore - 500) * 8;
+
+                    if (colorRating > 1000) {
+                        colorRating = 1000;
+                    } else if (colorRating < 0) {
+                        colorRating = 0;
+                    }
+
+                    var color = battle.getRatingColor(colorRating);
+                    $row.find(".team-score .rating").css(
+                        "background-color",
+                        "rgb(" + color[0] + "," + color[1] + "," + color[2] + ")",
+                    );
+
+                    var usage = ((r.games / (data.properties.totalPerformers / 3)) * 100).toFixed(1) + "%";
+
+                    if (r.usageTrend) {
+                        $row.find(".usage").html(
+                            '<div class="flex"><span class="usage-value">' +
+                                usage +
+                                '</span><a class="usage-link" pokemon="' +
+                                r.pokemon +
+                                '" species-id="' +
+                                speciesId +
+                                '" label="' +
+                                pokemon.speciesName +
+                                " " +
+                                movesetStr +
+                                '" href="#"></a></div>',
+                        );
+                    } else {
+                        $row.find(".usage").html(usage);
+                    }
+
+                    $row.find(".link a").attr(
+                        "href",
+                        host +
+                            "rankings/" +
+                            battle.getCup().name +
+                            "/" +
+                            battle.getCP() +
+                            "/overall/" +
+                            pokemon.speciesId +
+                            "/",
+                    );
+
+                    if (r.games < 250) {
+                        $row.find(".usage").addClass("low-volume");
+                    }
+
+                    $(".train-table.performers tbody").append($row);
 
-			}
+                    performerCSV +=
+                        pokemon.speciesName +
+                        " " +
+                        movesetStr +
+                        "," +
+                        r.teamScore +
+                        "," +
+                        r.individualScore +
+                        "," +
+                        usage +
+                        "\n";
+                }
 
-			// Displays the grabbed data. Showoff.
+                // Display top teams rankings
+                teamCSV = "Team,Team Rating,Usage\n";
+
+                for (var i = 0; i < rankings.teams.length; i++) {
+                    var r = rankings.teams[i];
+                    var team = [];
+                    var arr = r.team.split("|"); // Split string value into Pokemon
 
-			this.displayRankingData = function(rankings){
+                    // Create a new row
+                    var $row = $(".train-table.teams thead tr.hide").clone();
+                    $row.removeClass("hide");
 
-				data = rankings;
+                    var cupName = battle.getCup().name;
+                    var teamURL = host + "team-builder/" + cupName + "/" + battle.getCP(true) + "/";
+                    var teamStr = "";
 
-				$(".train-table tbody").html('');
+                    for (var n = 0; n < arr.length; n++) {
+                        var speciesId = arr[n].split(" ")[0];
+                        var movesetStr = arr[n].split(" ")[1];
 
-				// Initialize csv data
+                        var pokemon = new Pokemon(speciesId, 0, battle);
 
-				performerCSV = 'Pokemon,Team Rating,Individual Rating,Usage\n';
+                        if (!pokemon.speciesId) {
+                            continue;
+                        }
 
+                        teamStr += pokemon.speciesName + " " + movesetStr + " ";
 
-				// Display top performers rankings
+                        $row.find(".sprite-container").eq(n).attr("type-1", pokemon.types[0]);
+                        $row.find(".sprite-container").eq(n).attr("type-2", pokemon.types[0]);
+                        $row.find(".sprite-container").eq(n).attr("data", speciesId);
 
-				for(var i = 0; i < rankings.performers.length; i++){
-					var r = rankings.performers[i];
+                        if (pokemon.types[1] != "none") {
+                            $row.find(".sprite-container").eq(n).attr("type-2", pokemon.types[1]);
+                        }
 
-					// For now, convert species name to a species ID
-					var arr = r.pokemon.split(" ");
-					var movesetStr = arr[arr.length-1];
-					var movesetArr = movesetStr.split(/\+|\//);
-					var speciesId = r.pokemon.replace(" " + movesetStr, "");
+                        $row.find(".name").eq(n).html(pokemon.speciesName);
+                        $row.find(".moves").eq(n).html(movesetStr);
 
-					var pokemon = new Pokemon(speciesId, 0, battle);
+                        var abbreviationArr = movesetStr.split("/");
 
-					if(! pokemon.speciesId){
-						continue;
-					}
+                        // Identify fast move
+                        var fastMoveIndex = 0;
 
-					// Create a new row
-					var $row = $(".train-table.performers thead tr.hide").clone();
-					$row.removeClass("hide");
-					$row.attr("data", speciesId);
-					$row.find(".sprite-container").attr("type-1", pokemon.types[0]);
-					$row.find(".sprite-container").attr("type-2", pokemon.types[0]);
+                        for (var j = 0; j < pokemon.fastMovePool.length; j++) {
+                            if (pokemon.fastMovePool[j].abbreviation == abbreviationArr[0]) {
+                                fastMoveIndex = j;
+                                break;
+                            }
+                        }
 
-					if(pokemon.types[1] != "none"){
-						$row.find(".sprite-container").attr("type-2", pokemon.types[1]);
-					}
+                        var chargedMoveIndexes = [];
 
-					$row.find(".name").html(pokemon.speciesName);
-					$row.find(".moves").html(r.pokemon.split(" ")[1]);
-					$row.find(".individual-score").html(r.individualScore.toFixed(1) + '%');
-					$row.find(".team-score .rating").html('<span></span>'+r.teamScore.toFixed(1));
-					$row.find(".team-score .rating").addClass(battle.getRatingClass(r.teamScore));
+                        for (var j = 0; j < pokemon.chargedMovePool.length; j++) {
+                            if (pokemon.chargedMovePool[j].abbreviation == abbreviationArr[1]) {
+                                chargedMoveIndexes.push(j + 1);
+                            }
 
-					// Normalize rating so it has more visual effect
-					var colorRating = 500 + ((r.teamScore - 500) * 8);
+                            if (
+                                abbreviationArr.length > 2 &&
+                                pokemon.chargedMovePool[j].abbreviation == abbreviationArr[2]
+                            ) {
+                                chargedMoveIndexes.push(j + 1);
+                            }
+                        }
 
-					if(colorRating > 1000){
-						colorRating = 1000;
-					} else if(colorRating < 0){
-						colorRating = 0;
-					}
+                        var pokeStr = pokemon.speciesId + "-m-" + fastMoveIndex + "-" + chargedMoveIndexes[0];
 
-					var color = battle.getRatingColor(colorRating);
-					$row.find(".team-score .rating").css("background-color", "rgb("+color[0]+","+color[1]+","+color[2]+")");
+                        if (chargedMoveIndexes.length > 1) {
+                            pokeStr += "-" + chargedMoveIndexes[1];
+                        }
 
-					var usage = (r.games / (data.properties.totalPerformers / 3) * 100).toFixed(1)+"%"
+                        if (n > 0) {
+                            teamURL += ",";
+                        }
 
-					if(r.usageTrend){
-						$row.find(".usage").html("<div class=\"flex\"><span class=\"usage-value\">"+usage + "</span><a class=\"usage-link\" pokemon=\""+r.pokemon+"\" species-id=\""+speciesId+"\" label=\""+pokemon.speciesName+" "+movesetStr+"\" href=\"#\"></a></div>");
-					} else{
-						$row.find(".usage").html(usage);
-					}
+                        teamURL += pokeStr;
 
-					$row.find(".link a").attr("href", host+"rankings/" + battle.getCup().name + "/" + battle.getCP() + "/overall/" + pokemon.speciesId + "/");
+                        team.push(pokemon);
+                    }
 
-					if(r.games < 250){
-						$row.find(".usage").addClass("low-volume");
-					}
+                    $row.find(".link a").attr("href", teamURL);
+                    $row.find(".team-score .rating").html("<span></span>" + r.teamScore.toFixed(1));
+                    $row.find(".team-score .rating").addClass(battle.getRatingClass(r.teamScore));
 
-					$(".train-table.performers tbody").append($row);
+                    // Normalize rating so it has more visual effect
+                    var colorRating = 500 + (r.teamScore - 500) * 8;
 
-					performerCSV += pokemon.speciesName + ' ' + movesetStr + ',' + r.teamScore + ',' + r.individualScore + ',' + usage + '\n';
-				}
+                    if (colorRating > 1000) {
+                        colorRating = 1000;
+                    } else if (colorRating < 0) {
+                        colorRating = 0;
+                    }
 
-				// Display top teams rankings
-				teamCSV = 'Team,Team Rating,Usage\n'
+                    var color = battle.getRatingColor(colorRating);
+                    var usage = ((r.games / data.properties.totalTeams) * 100).toFixed(1) + "%";
 
-				for(var i = 0; i < rankings.teams.length; i++){
-					var r = rankings.teams[i];
-					var team = [];
-					var arr = r.team.split("|"); // Split string value into Pokemon
+                    $row.find(".team-score .rating").css(
+                        "background-color",
+                        "rgb(" + color[0] + "," + color[1] + "," + color[2] + ")",
+                    );
+                    $row.find(".usage").html(usage);
 
-					// Create a new row
-					var $row = $(".train-table.teams thead tr.hide").clone();
-					$row.removeClass("hide");
+                    if (r.games < 30) {
+                        $row.find(".usage").addClass("low-volume");
+                    }
 
-					var cupName = battle.getCup().name;
-					var teamURL = host + "team-builder/" + cupName + "/" + battle.getCP(true) + "/";
-					var teamStr = '';
+                    teamCSV += teamStr + "," + r.teamScore + "," + usage + "\n";
 
-					for(var n = 0; n < arr.length; n++){
-						var speciesId = arr[n].split(" ")[0];
-						var movesetStr = arr[n].split(" ")[1];
+                    $(".train-table.teams tbody").append($row);
+                }
 
-						var pokemon = new Pokemon(speciesId, 0, battle);
+                $(".loading").hide();
 
-						if(! pokemon.speciesId){
-							continue;
-						}
+                // Update download link with new data
+                var filename = battle.getCup().name + " " + battle.getCP() + " Top Performers.csv";
+                var filedata = "";
 
-						teamStr += pokemon.speciesName + " " + movesetStr + " ";
+                if (!performerCSV.match(/^data:text\/csv/i)) {
+                    filedata = [performerCSV];
+                    filedata = new Blob(filedata, { type: "text/csv" });
+                }
 
-						$row.find(".sprite-container").eq(n).attr("type-1", pokemon.types[0]);
-						$row.find(".sprite-container").eq(n).attr("type-2", pokemon.types[0]);
-						$row.find(".sprite-container").eq(n).attr("data", speciesId);
+                $(".button.download-csv.performers").attr("href", window.URL.createObjectURL(filedata));
+                $(".button.download-csv.performers").attr("download", filename);
 
-						if(pokemon.types[1] != "none"){
-							$row.find(".sprite-container").eq(n).attr("type-2", pokemon.types[1]);
-						}
+                // Update download link with new data
+                var filename = battle.getCup().name + " " + battle.getCP() + " Top Teams.csv";
+                var filedata = "";
 
-						$row.find(".name").eq(n).html(pokemon.speciesName);
-						$row.find(".moves").eq(n).html(movesetStr);
+                if (!performerCSV.match(/^data:text\/csv/i)) {
+                    filedata = [teamCSV];
+                    filedata = new Blob(filedata, { type: "text/csv" });
+                }
 
-						var abbreviationArr = movesetStr.split("/");
+                $(".button.download-csv.teams").attr("href", window.URL.createObjectURL(filedata));
+                $(".button.download-csv.teams").attr("download", filename);
 
-						// Identify fast move
-						var fastMoveIndex = 0;
+                // Display last update date
 
-						for(var j = 0; j < pokemon.fastMovePool.length; j++){
-							if(pokemon.fastMovePool[j].abbreviation == abbreviationArr[0]){
-								fastMoveIndex = j;
-								break;
-							}
-						}
+                $(".date-updated").html("Last updated " + data.properties.lastUpdated);
 
-						var chargedMoveIndexes = [];
+                // If search string exists, process it
 
-						for(var j = 0; j < pokemon.chargedMovePool.length; j++){
-							if(pokemon.chargedMovePool[j].abbreviation == abbreviationArr[1]){
-								chargedMoveIndexes.push(j+1);
-							}
+                if ($(".poke-search").val() != "") {
+                    $(".poke-search").trigger("keyup");
+                }
+            };
 
-							if((abbreviationArr.length > 2)&&(pokemon.chargedMovePool[j].abbreviation == abbreviationArr[2])){
-								chargedMoveIndexes.push(j+1);
-							}
-						}
+            // Given JSON of get parameters, load these settings
 
-						var pokeStr = pokemon.speciesId + "-m-" + fastMoveIndex + "-" + chargedMoveIndexes[0];
+            this.loadGetData = function () {
+                if (!get) {
+                    return false;
+                }
 
-						if(chargedMoveIndexes.length > 1){
-							pokeStr += "-" + chargedMoveIndexes[1];
-						}
+                // Cycle through parameters and set them
+                var cp = 1500;
+                var cup = "all";
 
-						if(n > 0){
-							teamURL += ",";
-						}
+                for (var key in get) {
+                    if (get.hasOwnProperty(key)) {
+                        var val = get[key];
 
-						teamURL += pokeStr;
+                        // Process each type of parameter
 
-						team.push(pokemon);
-					}
+                        switch (key) {
+                            // Don't process default values so data doesn't needlessly reload
 
-					$row.find(".link a").attr("href", teamURL);
-					$row.find(".team-score .rating").html('<span></span>'+r.teamScore.toFixed(1));
-					$row.find(".team-score .rating").addClass(battle.getRatingClass(r.teamScore));
+                            case "cp":
+                                cp = val;
+                                break;
 
+                            case "cup":
+                                cup = val;
+                                break;
+                        }
+                    }
+                }
 
-					// Normalize rating so it has more visual effect
-					var colorRating = 500 + ((r.teamScore - 500) * 8);
+                // Load data via existing change function
 
-					if(colorRating > 1000){
-						colorRating = 1000;
-					} else if(colorRating < 0){
-						colorRating = 0;
-					}
+                $('.format-select option[value="' + cp + '"][cup="' + cup + '"]').prop("selected", "selected");
 
-					var color = battle.getRatingColor(colorRating);
-					var usage = ((r.games / data.properties.totalTeams)*100).toFixed(1)+"%";
+                battle.setCP(cp);
+                battle.setCup(cup);
+                self.loadRankings(cp, cup);
+            };
 
-					$row.find(".team-score .rating").css("background-color", "rgb("+color[0]+","+color[1]+","+color[2]+")");
-					$row.find(".usage").html(usage);
+            // When the view state changes, push to browser history so it can be navigated forward or back
 
-					if(r.games < 30){
-						$row.find(".usage").addClass("low-volume");
-					}
+            this.pushHistoryState = function (cup, cp) {
+                var url = webRoot + "train/analysis/" + cup + "/" + cp + "/";
 
-					teamCSV += teamStr + ',' + r.teamScore + ',' + usage + '\n';
+                var data = { cup: cup, cp: cp };
 
-					$(".train-table.teams tbody").append($row);
-				}
+                window.history.pushState(data, "Rankings", url);
+            };
 
-				$(".loading").hide();
+            // Event handler for changing the format category
 
-				// Update download link with new data
-				var filename = battle.getCup().name + " " + battle.getCP() + " Top Performers.csv";
-				var filedata = '';
+            function selectFormat(e) {
+                var cp = $(".format-select option:selected").val();
+                var cup = $(".format-select option:selected").attr("cup");
+                var levelCap = parseInt($(".format-select option:selected").attr("level-cap"));
 
-				if (!performerCSV.match(/^data:text\/csv/i)) {
-					filedata = [performerCSV];
-					filedata = new Blob(filedata, { type: 'text/csv'});
-				}
+                battle.setCP(cp);
+                battle.setCup(cup);
+                battle.setLevelCap(levelCap);
 
-				$(".button.download-csv.performers").attr("href", window.URL.createObjectURL(filedata));
-				$(".button.download-csv.performers").attr("download", filename);
+                self.loadRankings(cp, cup);
+                self.pushHistoryState(cup, cp);
+            }
 
-				// Update download link with new data
-				var filename = battle.getCup().name + " " + battle.getCP() + " Top Teams.csv";
-				var filedata = '';
+            // Event handler for selecting ranking category
 
-				if (!performerCSV.match(/^data:text\/csv/i)) {
-					filedata = [teamCSV];
-					filedata = new Blob(filedata, { type: 'text/csv'});
-				}
+            function sortTable(e) {
+                e.preventDefault();
 
-				$(".button.download-csv.teams").attr("href", window.URL.createObjectURL(filedata));
-				$(".button.download-csv.teams").attr("download", filename);
+                var $parent = $(e.target).closest("table");
 
-				// Display last update date
+                $parent.find("thead a").removeClass("selected");
 
-				$(".date-updated").html("Last updated " + data.properties.lastUpdated);
+                $(e.target).addClass("selected");
 
-				// If search string exists, process it
+                var targetData = data.performers;
+                var sortColumn = $(e.target).attr("data");
 
-				if($(".poke-search").val() != ''){
-					$(".poke-search").trigger("keyup");
-				}
-			}
+                if ($parent.hasClass("teams")) {
+                    targetData = data.teams;
+                }
 
-			// Given JSON of get parameters, load these settings
+                switch (sortColumn) {
+                    case "name":
+                        targetData.sort((a, b) => (a.pokemon > b.pokemon ? 1 : b.pokemon > a.pokemon ? -1 : 0));
+                        break;
 
-			this.loadGetData = function(){
+                    case "lead":
+                        targetData.sort((a, b) => (a.team > b.team ? 1 : b.team > a.team ? -1 : 0));
+                        break;
 
-				if(! get){
-					return false;
-				}
+                    case "individual":
+                        targetData.sort((a, b) =>
+                            a.individualScore > b.individualScore ? -1 : b.individualScore > a.individualScore ? 1 : 0,
+                        );
+                        break;
 
-				// Cycle through parameters and set them
-				var cp = 1500;
-				var cup = "all";
+                    case "team":
+                        targetData.sort((a, b) => (a.teamScore > b.teamScore ? -1 : b.teamScore > a.teamScore ? 1 : 0));
+                        break;
 
-				for(var key in get){
-					if(get.hasOwnProperty(key)){
+                    case "usage":
+                        targetData.sort((a, b) => (a.games > b.games ? -1 : b.games > a.games ? 1 : 0));
+                        break;
+                }
 
-						var val = get[key];
+                self.displayRankingData(data);
 
-						// Process each type of parameter
+                submitSearchQuery();
+            }
 
-						switch(key){
+            var searchTimeout;
+            var searchStr = "";
+            var $target = null;
 
-							// Don't process default values so data doesn't needlessly reload
+            $("body").on("keyup", ".poke-search", function (e) {
+                searchStr = $(this).val().toLowerCase().trim();
 
-							case "cp":
-								cp = val;
-								break;
+                $target = $(".train-table." + $(e.target).attr("target"));
 
-							case "cup":
-								cup = val;
-								break;
-						}
-					}
-				}
+                // Reset the timeout when a new key is typed. This prevents queries from being submitted too quickly and bogging things down on mobile.
+                window.clearTimeout(searchTimeout);
+                searchTimeout = window.setTimeout(submitSearchQuery, 200);
+            });
 
-				// Load data via existing change function
+            $("a.search-info").click(function (e) {
+                e.preventDefault();
+                modalWindow("Search Strings", $(".sandbox-search-strings"));
+            });
 
-				$(".format-select option[value=\""+cp+"\"][cup=\""+cup+"\"]").prop("selected","selected");
+            function submitSearchQuery() {
+                var list = GameMaster.getInstance().generatePokemonListFromSearchString(searchStr, battle);
 
-				battle.setCP(cp);
-				battle.setCup(cup);
-				self.loadRankings(cp, cup);
-			}
+                if ($target.hasClass("performers")) {
+                    // Search rows of top performers
+                    $target.find("tbody tr").each(function (index, value) {
+                        var id = $(this).attr("data");
 
-			// When the view state changes, push to browser history so it can be navigated forward or back
+                        if (list.indexOf(id) > -1) {
+                            $(this).show();
+                        } else {
+                            $(this).hide();
+                        }
+                    });
+                } else if ($target.hasClass("teams")) {
+                    // Search makeups of team
+                    $target.find("tbody tr").each(function (index, value) {
+                        var $row = $(this);
+                        var found = 0;
 
-			this.pushHistoryState = function(cup, cp){
+                        $row.find(".pokemon").each(function (spriteIndex, spriteValue) {
+                            var id = $(this).attr("data");
 
-				var url = webRoot+"train/analysis/"+cup+"/"+cp+"/";
+                            if (list.indexOf(id) > -1) {
+                                found++;
+                            }
+                        });
 
-				var data = {cup: cup, cp: cp };
+                        if (found >= 3 || (!searchStr.includes("!") && found > 0)) {
+                            $row.show();
+                        } else {
+                            $row.hide();
+                        }
+                    });
+                }
+            }
 
-				window.history.pushState(data, "Rankings", url);
-			}
+            // Display usage trend stats in modal window
+            function displayUsage(e) {
+                e.preventDefault();
 
+                var trainingId = $(e.target).attr("pokemon");
+                var speciesId = $(e.target).attr("species-id");
+                var label = $(e.target).attr("label");
+                var r = data.performers.filter((ranking) => ranking.pokemon == trainingId)[0];
 
-			// Event handler for changing the format category
+                var pokemon = new Pokemon(speciesId, 0, battle);
 
-			function selectFormat(e){
-				var cp = $(".format-select option:selected").val();
-				var cup = $(".format-select option:selected").attr("cup");
-				var levelCap = parseInt($(".format-select option:selected").attr("level-cap"));
+                modalWindow(pokemon.speciesName + " Usage", $(".usage-modal"));
 
-				battle.setCP(cp);
-				battle.setCup(cup);
-				battle.setLevelCap(levelCap);
+                $(".modal .pokemon-label").html(label);
 
-				self.loadRankings(cp, cup);
-				self.pushHistoryState(cup, cp);
-			}
+                $(".modal").attr("training-id", trainingId);
 
-			// Event handler for selecting ranking category
+                drawUsageChart([r]);
 
-			function sortTable(e){
+                // Populate comparison select
+                var performers = JSON.parse(JSON.stringify(data.performers)); // Clone performers data before we modify it
+                performers.sort((a, b) => (a.pokemon > b.pokemon ? 1 : b.pokemon > a.pokemon ? -1 : 0));
 
-				e.preventDefault();
+                for (var i = 0; i < performers.length; i++) {
+                    var r = performers[i];
 
-				var $parent = $(e.target).closest("table");
+                    if (r.usageTrend && r.pokemon != trainingId) {
+                        var speciesId = r.pokemon.split(" ")[0];
+                        var movesetStr = r.pokemon.split(" ")[1];
+                        pokemon = new Pokemon(speciesId, 0, battle);
 
-				$parent.find("thead a").removeClass("selected");
+                        $(".modal .usage-compare-select").append(
+                            '<option value="' + r.pokemon + '">' + pokemon.speciesName + " " + movesetStr + "</option>",
+                        );
+                    }
+                }
+            }
 
-				$(e.target).addClass("selected");
+            // Draw usage chart given primary usage data
+            function drawUsageChart(rows, animateFirst) {
+                var canvas = $(".modal .usage-chart")[0];
+                var cnvWidth = parseInt($(canvas).attr("width"));
+                var cnvHeight = parseInt($(canvas).attr("height"));
+                var ctx = canvas.getContext("2d");
+                var numberOfAxis = 3;
+                var numberofSubAxis = 7;
 
-				var targetData = data.performers;
-				var sortColumn = $(e.target).attr("data");
+                animateFirst = typeof animateFirst !== "undefined" ? animateFirst : true;
 
-				if($parent.hasClass("teams")){
-					targetData = data.teams;
-				}
+                ctx.clearRect(0, 0, cnvWidth, cnvHeight);
 
-				switch(sortColumn){
-					case "name":
-						targetData.sort((a,b) => (a.pokemon > b.pokemon) ? 1 : ((b.pokemon > a.pokemon) ? -1 : 0));
-						break;
+                ctx.strokeStyle = "rgba(0, 52, 98, 0.3)";
+                ctx.lineWidth = 1;
 
-					case "lead":
-						targetData.sort((a,b) => (a.team > b.team) ? 1 : ((b.team > a.team) ? -1 : 0));
-						break;
-
-					case "individual":
-						targetData.sort((a,b) => (a.individualScore > b.individualScore) ? -1 : ((b.individualScore > a.individualScore) ? 1 : 0));
-						break;
-
-					case "team":
-						targetData.sort((a,b) => (a.teamScore > b.teamScore) ? -1 : ((b.teamScore > a.teamScore) ? 1 : 0));
-						break;
-
-					case "usage":
-						targetData.sort((a,b) => (a.games > b.games) ? -1 : ((b.games > a.games) ? 1 : 0));
-						break;
-				}
-
-				self.displayRankingData(data);
-
-				submitSearchQuery();
-			}
-
-			var searchTimeout;
-			var searchStr = '';
-			var $target = null;
-
-			$("body").on("keyup", ".poke-search", function(e){
-				searchStr = $(this).val().toLowerCase().trim();
-
-				$target = $(".train-table."+$(e.target).attr("target"));
-
-				// Reset the timeout when a new key is typed. This prevents queries from being submitted too quickly and bogging things down on mobile.
-				window.clearTimeout(searchTimeout);
-				searchTimeout = window.setTimeout(submitSearchQuery, 200);
-			});
-
-			$("a.search-info").click(function(e){
-				e.preventDefault();
-				modalWindow("Search Strings", $(".sandbox-search-strings"));
-			});
-
-			function submitSearchQuery(){
-				var list = GameMaster.getInstance().generatePokemonListFromSearchString(searchStr, battle);
-
-				if($target.hasClass("performers")){
-
-					// Search rows of top performers
-					$target.find("tbody tr").each(function(index, value){
-						var id = $(this).attr("data");
-
-						if(list.indexOf(id) > -1){
-							$(this).show();
-						} else{
-							$(this).hide();
-						}
-					});
-
-				} else if($target.hasClass("teams")){
-
-					// Search makeups of team
-					$target.find("tbody tr").each(function(index, value){
-						var $row = $(this);
-						var found = 0;
-
-						$row.find(".pokemon").each(function(spriteIndex, spriteValue){
-							var id = $(this).attr("data");
-
-							if(list.indexOf(id) > -1){
-								found++;
-							}
-						});
-
-						if(found >= 3 || (! searchStr.includes("!")) && found > 0){
-							$row.show();
-						} else{
-							$row.hide();
-						}
-
-					});
-				}
-			}
-
-			// Display usage trend stats in modal window
-			function displayUsage(e){
-				e.preventDefault();
-
-				var trainingId = $(e.target).attr("pokemon");
-				var speciesId = $(e.target).attr("species-id");
-				var label = $(e.target).attr("label");
-				var r = data.performers.filter( ranking => ranking.pokemon == trainingId)[0];
-
-				var pokemon = new Pokemon(speciesId, 0, battle);
-
-				modalWindow(pokemon.speciesName + " Usage", $(".usage-modal"));
-
-				$(".modal .pokemon-label").html(label);
-
-				$(".modal").attr("training-id", trainingId);
-
-				drawUsageChart([r]);
-
-				// Populate comparison select
-				var performers = JSON.parse(JSON.stringify(data.performers)); // Clone performers data before we modify it
-				performers.sort((a,b) => (a.pokemon > b.pokemon) ? 1 : ((b.pokemon > a.pokemon) ? -1 : 0));
-
-				for(var i = 0; i < performers.length; i++){
-					var r = performers[i];
-
-					if(r.usageTrend && r.pokemon != trainingId){
-						var speciesId = r.pokemon.split(" ")[0];
-						var movesetStr = r.pokemon.split(" ")[1];
-						pokemon = new Pokemon(speciesId, 0, battle);
-
-						$(".modal .usage-compare-select").append("<option value=\""+r.pokemon+"\">"+pokemon.speciesName + " " + movesetStr + "</option>");
-					}
-				}
-			}
-
-			// Draw usage chart given primary usage data
-			function drawUsageChart(rows, animateFirst){
-				var canvas = $(".modal .usage-chart")[0];
-				var cnvWidth = parseInt($(canvas).attr("width"));
-				var cnvHeight = parseInt($(canvas).attr("height"));
-				var ctx = canvas.getContext("2d");
-				var numberOfAxis = 3;
-				var numberofSubAxis = 7;
-
-				animateFirst = typeof animateFirst !== 'undefined' ? animateFirst : true;
-
-				ctx.clearRect(0, 0, cnvWidth, cnvHeight);
-
-				ctx.strokeStyle = "rgba(0, 52, 98, 0.3)";
-				ctx.lineWidth = 1;
-
-				// Draw vertical axis
-				/*for(var i = 0; i < numberOfAxis; i++){
+                // Draw vertical axis
+                /*for(var i = 0; i < numberOfAxis; i++){
 					var x = (cnvWidth / (numberOfAxis + 1)) * (i + 1);
 					ctx.beginPath();
 					ctx.moveTo(x, 0);
@@ -521,156 +547,160 @@ var InterfaceMaster = (function () {
 					ctx.stroke();
 				}*/
 
-				// Draw horizontal axis
-				for(var i = 0; i < numberOfAxis; i++){
-					var y = (cnvHeight / (numberOfAxis + 1)) * (i + 1);
-					ctx.beginPath();
-					ctx.moveTo(0, y);
-					ctx.lineTo(cnvWidth, y);
-					ctx.stroke();
-				}
+                // Draw horizontal axis
+                for (var i = 0; i < numberOfAxis; i++) {
+                    var y = (cnvHeight / (numberOfAxis + 1)) * (i + 1);
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(cnvWidth, y);
+                    ctx.stroke();
+                }
 
-				ctx.strokeStyle = "rgba(0, 52, 98, 0.05)";
+                ctx.strokeStyle = "rgba(0, 52, 98, 0.05)";
 
-				// Draw vertical subaxis
-				for(var i = 0; i < numberofSubAxis; i++){
-					var x = (cnvWidth / (numberofSubAxis + 1)) * (i + 1);
-					ctx.beginPath();
-					ctx.moveTo(x, 0);
-					ctx.lineTo(x, cnvHeight);
-					ctx.stroke();
-				}
+                // Draw vertical subaxis
+                for (var i = 0; i < numberofSubAxis; i++) {
+                    var x = (cnvWidth / (numberofSubAxis + 1)) * (i + 1);
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, cnvHeight);
+                    ctx.stroke();
+                }
 
-				// Draw horizontal subaxis
-				for(var i = 0; i < numberofSubAxis; i++){
-					var y = (cnvHeight / (numberofSubAxis + 1)) * (i + 1);
-					ctx.beginPath();
-					ctx.moveTo(0, y);
-					ctx.lineTo(cnvWidth, y);
-					ctx.stroke();
-				}
+                // Draw horizontal subaxis
+                for (var i = 0; i < numberofSubAxis; i++) {
+                    var y = (cnvHeight / (numberofSubAxis + 1)) * (i + 1);
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(cnvWidth, y);
+                    ctx.stroke();
+                }
 
-				// Determine vertical scale
-				var yAxisMax = 20;
-				var maxValueInData = 0;
+                // Determine vertical scale
+                var yAxisMax = 20;
+                var maxValueInData = 0;
 
-				for(var i = 0; i < rows.length; i++){
-					maxValueInData = Math.max(maxValueInData, Math.max(...rows[i].usageTrend));
-				}
+                for (var i = 0; i < rows.length; i++) {
+                    maxValueInData = Math.max(maxValueInData, Math.max(...rows[i].usageTrend));
+                }
 
-				if(maxValueInData > 20){
-					yAxisMax = 50;
-				}
+                if (maxValueInData > 20) {
+                    yAxisMax = 50;
+                }
 
-				$(".modal .y-axis-container .value").first().html(yAxisMax+"%");
+                $(".modal .y-axis-container .value")
+                    .first()
+                    .html(yAxisMax + "%");
 
-				// Display dates on X axis
+                // Display dates on X axis
 
-				var currentDate = new Date(Date.parse(data.properties.lastUpdated));
-				var earliestDate = new Date(new Date().setDate(currentDate.getDate()-30));
+                var currentDate = new Date(Date.parse(data.properties.lastUpdated));
+                var earliestDate = new Date(new Date().setDate(currentDate.getDate() - 30));
 
-				$(".modal .x-axis-container .value").eq(0).html(earliestDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
-				$(".modal .x-axis-container .value").eq(1).html(currentDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
+                $(".modal .x-axis-container .value")
+                    .eq(0)
+                    .html(earliestDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
+                $(".modal .x-axis-container .value")
+                    .eq(1)
+                    .html(currentDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
 
-				for(var i = 0; i < rows.length; i++){
-					var r = rows[i];
-					var animate = true;
+                for (var i = 0; i < rows.length; i++) {
+                    var r = rows[i];
+                    var animate = true;
 
-					if(i == 0){
-						animate = animateFirst;
-					}
-					drawTrendLine(r, $(".modal canvas[canvas-id=\""+i+"\"]")[0], yAxisMax, animate);
-				}
-			}
+                    if (i == 0) {
+                        animate = animateFirst;
+                    }
+                    drawTrendLine(r, $('.modal canvas[canvas-id="' + i + '"]')[0], yAxisMax, animate);
+                }
+            }
 
-			// Draw usage trend line
+            // Draw usage trend line
 
-			function drawTrendLine(r, canvas, yAxisMax, animate){
-				var cnvWidth = parseInt($(canvas).attr("width"));
-				var cnvHeight = parseInt($(canvas).attr("height"));
-				var ctx = canvas.getContext("2d");
-				var canvasId = parseInt($(canvas).attr("canvas-id"));
+            function drawTrendLine(r, canvas, yAxisMax, animate) {
+                var cnvWidth = parseInt($(canvas).attr("width"));
+                var cnvHeight = parseInt($(canvas).attr("height"));
+                var ctx = canvas.getContext("2d");
+                var canvasId = parseInt($(canvas).attr("canvas-id"));
 
-				var speciesId = r.pokemon.split(" ")[0];
-				var pokemon = new Pokemon(speciesId, 0, battle);
+                var speciesId = r.pokemon.split(" ")[0];
+                var pokemon = new Pokemon(speciesId, 0, battle);
 
-				// Grab primary typing color
-				var $typed = $("<div></div>").addClass("color-reader buff " + pokemon.types[0]);
-				$("body").append($typed);
-				var lineColor = $typed.css("background-color")
-				$typed.remove();
+                // Grab primary typing color
+                var $typed = $("<div></div>").addClass("color-reader buff " + pokemon.types[0]);
+                $("body").append($typed);
+                var lineColor = $typed.css("background-color");
+                $typed.remove();
 
-				$(".modal .usage-legend").eq(canvasId).css("border-top-color", lineColor);
+                $(".modal .usage-legend").eq(canvasId).css("border-top-color", lineColor);
 
-				if(canvasId != 0){
-					ctx.clearRect(0, 0, cnvWidth, cnvHeight);
-					ctx.setLineDash([5, 5]);
-				}
+                if (canvasId != 0) {
+                    ctx.clearRect(0, 0, cnvWidth, cnvHeight);
+                    ctx.setLineDash([5, 5]);
+                }
 
-				// Draw main trend data
-				var startY = cnvHeight - ((r.usageTrend[0] / yAxisMax) * cnvHeight);
-				ctx.strokeStyle = lineColor;
-				ctx.lineWidth = 4;
+                // Draw main trend data
+                var startY = cnvHeight - (r.usageTrend[0] / yAxisMax) * cnvHeight;
+                ctx.strokeStyle = lineColor;
+                ctx.lineWidth = 4;
 
-				ctx.beginPath();
-				ctx.moveTo(0, r.startY);
+                ctx.beginPath();
+                ctx.moveTo(0, r.startY);
 
-				if(animate){
-					// Animate trend line
-					var n = 0;
+                if (animate) {
+                    // Animate trend line
+                    var n = 0;
 
-					var drawInterval = setInterval(function(){
-						var x = (n / (r.usageTrend.length-1)) * cnvWidth;
-						var y = cnvHeight - ((r.usageTrend[n] / yAxisMax) * cnvHeight);
+                    var drawInterval = setInterval(function () {
+                        var x = (n / (r.usageTrend.length - 1)) * cnvWidth;
+                        var y = cnvHeight - (r.usageTrend[n] / yAxisMax) * cnvHeight;
 
-						ctx.lineTo(x, y);
-						ctx.stroke();
-						n++;
+                        ctx.lineTo(x, y);
+                        ctx.stroke();
+                        n++;
 
-						if(n >= r.usageTrend.length){
-							clearInterval(drawInterval);
-						}
-					}, 25);
-				} else{
-					// Draw trend line without animation
-					for(var n = 0; n < r.usageTrend.length; n++){
-						var x = (n / (r.usageTrend.length-1)) * cnvWidth;
-						var y = cnvHeight - ((r.usageTrend[n] / yAxisMax) * cnvHeight);
+                        if (n >= r.usageTrend.length) {
+                            clearInterval(drawInterval);
+                        }
+                    }, 25);
+                } else {
+                    // Draw trend line without animation
+                    for (var n = 0; n < r.usageTrend.length; n++) {
+                        var x = (n / (r.usageTrend.length - 1)) * cnvWidth;
+                        var y = cnvHeight - (r.usageTrend[n] / yAxisMax) * cnvHeight;
 
-						ctx.lineTo(x, y);
-						ctx.stroke();
-					}
-				}
+                        ctx.lineTo(x, y);
+                        ctx.stroke();
+                    }
+                }
+            }
 
+            // Select a Pokemon to compare usage
 
-			}
+            function compareUsage(e) {
+                var baseTrainingId = $(".modal").attr("training-id");
+                var compareTrainingId = $(".modal .usage-compare-select option:selected").val();
 
-			// Select a Pokemon to compare usage
+                var rows = [
+                    data.performers.filter((ranking) => ranking.pokemon == baseTrainingId)[0],
+                    data.performers.filter((ranking) => ranking.pokemon == compareTrainingId)[0],
+                ];
 
-			function compareUsage(e){
-				var baseTrainingId = $(".modal").attr("training-id");
-				var compareTrainingId = $(".modal .usage-compare-select option:selected").val();
+                var compareSpeciesId = compareTrainingId.split(" ")[0];
+                var pokemon = new Pokemon(compareSpeciesId, 0, battle);
 
-				var rows = [
-					data.performers.filter( ranking => ranking.pokemon == baseTrainingId)[0],
-					data.performers.filter( ranking => ranking.pokemon == compareTrainingId)[0],
-				];
+                $(".modal .usage-compare-select").attr("class", "usage-compare-select " + pokemon.types[0]);
 
-				var compareSpeciesId = compareTrainingId.split(" ")[0];
-				var pokemon = new Pokemon(compareSpeciesId, 0, battle);
+                drawUsageChart(rows, false);
+            }
 
-				$(".modal .usage-compare-select").attr("class", "usage-compare-select " + pokemon.types[0]);
+            // Turn checkboxes on and off
 
-				drawUsageChart(rows, false);
-			}
-
-			// Turn checkboxes on and off
-
-			function checkBox(e){
-				$(this).toggleClass("on");
-				$(this).trigger("stateChange");
-			}
-		};
+            function checkBox(e) {
+                $(this).toggleClass("on");
+                $(this).trigger("stateChange");
+            }
+        }
 
         return object;
     }
@@ -681,6 +711,6 @@ var InterfaceMaster = (function () {
                 instance = createInstance();
             }
             return instance;
-        }
+        },
     };
 })();

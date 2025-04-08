@@ -1,451 +1,448 @@
 /*
-* Interface functionality for move list and explorer
-*/
+ * Interface functionality for move list and explorer
+ */
 
 var InterfaceMaster = (function () {
     var instance;
 
     function createInstance() {
-
         var object = new interfaceObject();
 
-		function interfaceObject(){
-			var self = this;
-			var gm = GameMaster.getInstance();
-			var battle;
-			var teams = [];
-			var multiSelector;
-			var selectedTeamIndex; // Store index of the selected team when editing
-			var selectedTeamPool = false; // Store the id of the selected team pool
-			var partySize = 3;
+        function interfaceObject() {
+            var self = this;
+            var gm = GameMaster.getInstance();
+            var battle;
+            var teams = [];
+            var multiSelector;
+            var selectedTeamIndex; // Store index of the selected team when editing
+            var selectedTeamPool = false; // Store the id of the selected team pool
+            var partySize = 3;
 
-			self.init = function(){
-				battle = new Battle();
+            self.init = function () {
+                battle = new Battle();
 
-				// Init the multiselector
-				multiSelector = new PokeMultiSelect($(".poke.multi"));
-				multiSelector.init(gm.data.pokemon, battle);
-				multiSelector.setMaxPokemonCount(partySize);
+                // Init the multiselector
+                multiSelector = new PokeMultiSelect($(".poke.multi"));
+                multiSelector.init(gm.data.pokemon, battle);
+                multiSelector.setMaxPokemonCount(partySize);
 
-				// Hide the CP and advanced IV's section of the pokeSelector
-				$(".poke.single h3.cp, .poke.single .advanced-section").hide();
+                // Hide the CP and advanced IV's section of the pokeSelector
+                $(".poke.single h3.cp, .poke.single .advanced-section").hide();
 
-				// Load Great League movesets by default
+                // Load Great League movesets by default
 
-				gm.loadRankingData(self, "overall", 1500, "all");
+                gm.loadRankingData(self, "overall", 1500, "all");
 
-				// Event handlers
+                // Event handlers
 
-				$(".button.new-team").click(setupNewTeam);
-				$(".button.add-team").click(addNewTeam);
-				$(".league-select").change(selectLeague);
-				$("body").on("click", "a.edit", setupEditTeam);
-				$("body").on("click", "a.delete", confirmDeleteTeam);
-				$(".button.save-changes").click(editTeam);
-				$("body").on("click", ".check", checkBox);
+                $(".button.new-team").click(setupNewTeam);
+                $(".button.add-team").click(addNewTeam);
+                $(".league-select").change(selectLeague);
+                $("body").on("click", "a.edit", setupEditTeam);
+                $("body").on("click", "a.delete", confirmDeleteTeam);
+                $(".button.save-changes").click(editTeam);
+                $("body").on("click", ".check", checkBox);
 
+                $(".training-editor-import textarea").change(function (e) {
+                    var data = JSON.parse($(".training-editor-import textarea").val());
+                    self.importTeams(data);
+                });
 
-				$(".training-editor-import textarea").change(function(e){
-					var data = JSON.parse($(".training-editor-import textarea").val());
-					self.importTeams(data);
-				});
+                // Load pools from local storage
+                var i = 0;
 
-				// Load pools from local storage
-				var i = 0;
+                while (window.localStorage.key(i) !== null) {
+                    var key = window.localStorage.key(i);
+                    var content = window.localStorage.getItem(key);
 
-				while(window.localStorage.key(i) !== null){
-					var key = window.localStorage.key(i);
-					var content = window.localStorage.getItem(key);
+                    try {
+                        var data = JSON.parse(content);
 
-					try{
-						var data = JSON.parse(content);
+                        if (data.dataType && data.dataType == "training-teams") {
+                            $(".team-fill-select").append(
+                                '<option value="' + key + '" type="custom">' + data.name + "</option>",
+                            );
+                        }
+                    } catch {}
 
-						if((data.dataType)&&(data.dataType == "training-teams")){
-							$(".team-fill-select").append("<option value=\""+key+"\" type=\"custom\">"+data.name+"</option>");
-						}
-					} catch{
+                    i++;
+                }
+            };
 
-					}
+            self.displayRankingData = function (data) {
+                console.log("Ranking data loaded");
+            };
 
-					i++;
-				}
-			}
+            // Display all selected teams
 
-			self.displayRankingData = function(data){
-				console.log("Ranking data loaded");
-			}
+            self.updateTeamList = function () {
+                $(".train-table tbody").html("");
 
-			// Display all selected teams
+                var teamJSON = [];
 
-			self.updateTeamList = function(){
-				$(".train-table tbody").html('');
+                for (var i = 0; i < teams.length; i++) {
+                    var team = teams[i];
 
-				var teamJSON = [];
+                    // Create a new row
+                    var $row = $(".train-table.teams thead tr.hide").clone();
+                    $row.removeClass("hide");
 
-				for(var i = 0; i < teams.length; i++){
-					var team = teams[i];
+                    for (var n = 0; n < team.length; n++) {
+                        var pokemon = team[n];
 
-					// Create a new row
-					var $row = $(".train-table.teams thead tr.hide").clone();
-					$row.removeClass("hide");
+                        $row.find(".sprite-container").eq(n).attr("type-1", pokemon.types[0]);
+                        $row.find(".sprite-container").eq(n).attr("type-2", pokemon.types[0]);
+                        $row.find(".sprite-container").eq(n).attr("data", pokemon.speciesId);
 
-					for(var n = 0; n < team.length; n++){
-						var pokemon = team[n];
+                        if (pokemon.types[1] != "none") {
+                            $row.find(".sprite-container").eq(n).attr("type-2", pokemon.types[1]);
+                        }
 
-						$row.find(".sprite-container").eq(n).attr("type-1", pokemon.types[0]);
-						$row.find(".sprite-container").eq(n).attr("type-2", pokemon.types[0]);
-						$row.find(".sprite-container").eq(n).attr("data", pokemon.speciesId);
+                        var movesetStr = pokemon.fastMove.abbreviation + "+" + pokemon.chargedMoves[0].abbreviation;
 
-						if(pokemon.types[1] != "none"){
-							$row.find(".sprite-container").eq(n).attr("type-2", pokemon.types[1]);
-						}
+                        if (pokemon.chargedMoves.length > 1) {
+                            movesetStr += "/" + pokemon.chargedMoves[1].abbreviation;
+                        }
 
-						var movesetStr = pokemon.fastMove.abbreviation+"+"+pokemon.chargedMoves[0].abbreviation;
+                        $row.find(".name").eq(n).html(pokemon.speciesName);
+                        $row.find(".moves").eq(n).html(movesetStr);
+                    }
 
-						if(pokemon.chargedMoves.length > 1){
-							movesetStr += "/" + pokemon.chargedMoves[1].abbreviation;
-						}
+                    $(".train-table.teams tbody").append($row);
 
-						$row.find(".name").eq(n).html(pokemon.speciesName);
-						$row.find(".moves").eq(n).html(movesetStr);
-					}
+                    // Hijack the multiSelector JSOn export to export the JSON for this team
 
-					$(".train-table.teams tbody").append($row);
+                    multiSelector.setPokemonList(team);
 
-					// Hijack the multiSelector JSOn export to export the JSON for this team
+                    var teamObj = {
+                        pokemon: JSON.parse(multiSelector.convertListToJSON()), // Oh boy
+                        weight: 1,
+                    };
+                    teamJSON.push(teamObj);
+                    multiSelector.setPokemonList([]);
+                }
 
-					multiSelector.setPokemonList(team);
+                // Display export json
+                var data = {
+                    name: "New Team Pool",
+                    dataType: "training-teams",
+                    data: teamJSON,
+                };
 
-					var teamObj = {
-						pokemon: JSON.parse(multiSelector.convertListToJSON()), // Oh boy
-						weight: 1
-					};
-					teamJSON.push(teamObj);
-					multiSelector.setPokemonList([]);
-				}
+                $(".training-editor-import textarea").val(self.convertListToJSON(""));
+            };
 
-				// Display export json
-				var data = {
-					name: "New Team Pool",
-					dataType: "training-teams",
-					data: teamJSON
-				};
+            // Import JSON data
 
-				$(".training-editor-import textarea").val(self.convertListToJSON(""));
-			}
+            self.importTeams = function (obj) {
+                // If the data isn't preformatted, adjust it to match export JSON format
 
-			// Import JSON data
+                if (!obj.dataType) {
+                    // I heard you liked objects so I put an object in your object
+                    obj = {
+                        name: "New Team Pool",
+                        dataType: "training-teams",
+                        data: obj,
+                    };
+                }
 
-			self.importTeams = function(obj){
-				// If the data isn't preformatted, adjust it to match export JSON format
+                console.log(obj);
 
-				if(! obj.dataType){
-					// I heard you liked objects so I put an object in your object
-					obj = {
-						name: "New Team Pool",
-						dataType: "training-teams",
-						data: obj
-					};
-				}
+                if (!obj.data) {
+                    return false;
+                }
 
-				console.log(obj);
+                // Hijack the multiSelector import to import each team
+                teams = [];
 
-				if(! obj.data){
-					return false;
-				}
+                for (var i = 0; i < obj.data.length; i++) {
+                    var team = obj.data[i].pokemon;
 
-				// Hijack the multiSelector import to import each team
-				teams = [];
+                    multiSelector.quickFillGroup(team);
+                    teams.push(multiSelector.getPokemonList());
+                }
 
-				for(var i = 0; i < obj.data.length; i++){
-					var team = obj.data[i].pokemon;
+                $(".multi-selector").hide();
+                $(".button.new-team").show();
 
-					multiSelector.quickFillGroup(team);
-					teams.push(multiSelector.getPokemonList());
-				}
+                self.updateTeamList();
+            };
 
-				$(".multi-selector").hide();
-				$(".button.new-team").show();
+            // Given an id, save current team pool to localstorage
 
-				self.updateTeamList();
-			}
+            self.saveTeamPool = function (name, isNew) {
+                var data = self.convertListToJSON(name);
 
-			// Given an id, save current team pool to localstorage
+                if (name == "") {
+                    return;
+                }
 
-			self.saveTeamPool = function(name, isNew){
-				var data = self.convertListToJSON(name);
+                window.localStorage.setItem("team-pool-" + name, data);
 
-				if(name == ''){
-					return;
-				}
+                if (!isNew) {
+                    modalWindow("Custom Group Saved", $("<p><b>" + name + "</b> has been updated.</p>"));
+                } else {
+                    // Add new group to all dropdowns
 
-				window.localStorage.setItem("team-pool-" + name, data);
+                    $(".team-fill-select").append(
+                        $('<option value="team-pool-' + name + '" type="custom">' + name + "</option>"),
+                    );
+                    $(".team-fill-select option").last().prop("selected", "selected");
 
-				if(! isNew){
-					modalWindow("Custom Group Saved", $("<p><b>"+name+"</b> has been updated.</p>"))
-				} else{
-					// Add new group to all dropdowns
+                    $(".team-fill-buttons .save-as").show();
+                    $(".team-fill-buttons .save-custom").show();
+                    $(".team-fill-buttons .delete-btn").show();
+                }
+            };
 
-					$(".team-fill-select").append($("<option value=\"team-pool-"+name+"\" type=\"custom\">"+name+"</option>"));
-					$(".team-fill-select option").last().prop("selected", "selected");
+            self.convertListToJSON = function (name) {
+                var teamJSON = [];
 
-					$(".team-fill-buttons .save-as").show();
-					$(".team-fill-buttons .save-custom").show();
-					$(".team-fill-buttons .delete-btn").show();
-				}
-			}
+                for (var i = 0; i < teams.length; i++) {
+                    var team = teams[i];
 
-			self.convertListToJSON = function(name){
-				var teamJSON = [];
+                    // Hijack the multiSelector JSOn export to export the JSON for this team
 
-				for(var i = 0; i < teams.length; i++){
-					var team = teams[i];
+                    multiSelector.setPokemonList(team);
 
-					// Hijack the multiSelector JSOn export to export the JSON for this team
+                    var teamObj = {
+                        pokemon: JSON.parse(multiSelector.convertListToJSON()), // Oh boy
+                        weight: 1,
+                    };
+                    teamJSON.push(teamObj);
+                    multiSelector.setPokemonList([]);
+                }
 
-					multiSelector.setPokemonList(team);
+                // Display export json
+                var data = {
+                    name: name,
+                    dataType: "training-teams",
+                    data: teamJSON,
+                };
 
-					var teamObj = {
-						pokemon: JSON.parse(multiSelector.convertListToJSON()), // Oh boy
-						weight: 1
-					};
-					teamJSON.push(teamObj);
-					multiSelector.setPokemonList([]);
-				}
+                return JSON.stringify(data);
+            };
 
-				// Display export json
-				var data = {
-					name: name,
-					dataType: "training-teams",
-					data: teamJSON
-				};
+            // Clear and display the multiSelector
 
-				return JSON.stringify(data);
-			}
+            function setupNewTeam(e) {
+                multiSelector.setPokemonList([]);
+                multiSelector.updateListDisplay();
+                $(".multi-selector").show();
+                $(".multi-selector").attr("mode", "new");
+                $(".button.new-team").hide();
 
-			// Clear and display the multiSelector
+                // Scroll to multiSelector
+                $("html, body").animate({ scrollTop: $(".multi-selector").offset().top - 185 }, 500);
+                $(".button.add-poke-btn").click();
+            }
 
-			function setupNewTeam(e){
-				multiSelector.setPokemonList([]);
-				multiSelector.updateListDisplay();
-				$(".multi-selector").show();
-				$(".multi-selector").attr("mode", "new");
-				$(".button.new-team").hide();
+            // Edit an existing team
 
-				// Scroll to multiSelector
-				$("html, body").animate({ scrollTop: $(".multi-selector").offset().top - 185 }, 500);
-				$(".button.add-poke-btn").click();
-			}
+            function setupEditTeam(e) {
+                e.preventDefault();
 
+                // Subtract 1 because the first button is in the hidden template
+                selectedTeamIndex = $("a.edit").index($(e.target)) - 1;
+                multiSelector.setPokemonList(teams[selectedTeamIndex]);
+                multiSelector.updateListDisplay();
+                $(".multi-selector").show();
+                $(".multi-selector").attr("mode", "edit");
 
-			// Edit an existing team
+                // Scroll to multiSelector
+                $("html, body").animate({ scrollTop: $(".multi-selector").offset().top - 185 }, 500);
+            }
 
-			function setupEditTeam(e){
-				e.preventDefault();
+            // Confirm the user wants to delete this team
 
-				// Subtract 1 because the first button is in the hidden template
-				selectedTeamIndex = $("a.edit").index($(e.target)) - 1;
-				multiSelector.setPokemonList(teams[selectedTeamIndex]);
-				multiSelector.updateListDisplay();
-				$(".multi-selector").show();
-				$(".multi-selector").attr("mode", "edit");
+            function confirmDeleteTeam(e) {
+                e.preventDefault();
 
-				// Scroll to multiSelector
-				$("html, body").animate({ scrollTop: $(".multi-selector").offset().top - 185 }, 500);
-			}
+                // Subtract 1 because the first button is in the hidden template
+                selectedTeamIndex = $("a.delete").index($(e.target)) - 1;
 
-			// Confirm the user wants to delete this team
+                var selectedTeam = teams[selectedTeamIndex];
 
-			function confirmDeleteTeam(e){
-				e.preventDefault();
+                modalWindow("Delete Team", $(".team-delete-confirm").first());
 
-				// Subtract 1 because the first button is in the hidden template
-				selectedTeamIndex = $("a.delete").index($(e.target)) - 1;
+                var teamList = "";
 
-				var selectedTeam = teams[selectedTeamIndex];
+                for (var i = 0; i < selectedTeam.length; i++) {
+                    if (i > 0) {
+                        teamList += ", ";
+                    }
 
-				modalWindow("Delete Team", $(".team-delete-confirm").first());
+                    teamList += selectedTeam[i].speciesName;
+                }
 
-				var teamList = "";
+                $(".modal p")
+                    .eq(1)
+                    .html("<b>" + teamList + "</b>");
 
-				for(var i = 0; i < selectedTeam.length; i++){
-					if(i > 0){
-						teamList += ", ";
-					}
+                // Hide the multiSelector so selected teams don't get mixed up
 
-					teamList += selectedTeam[i].speciesName;
-				}
+                $(".multi-selector").hide();
+                $(".button.new-team").show();
 
-				$(".modal p").eq(1).html("<b>"+teamList+"</b>");
+                $(".modal .yes").click(function (e) {
+                    teams.splice(selectedTeamIndex, 1);
+                    self.updateTeamList();
 
-				// Hide the multiSelector so selected teams don't get mixed up
+                    closeModalWindow();
+                });
 
-				$(".multi-selector").hide();
-				$(".button.new-team").show();
+                $(".modal .no").click(function (e) {
+                    closeModalWindow();
+                });
+            }
 
-				$(".modal .yes").click(function(e){
-					teams.splice(selectedTeamIndex, 1);
-					self.updateTeamList();
+            // Validate and add currently selected team
 
-					closeModalWindow();
-				});
+            function addNewTeam(e) {
+                var team = multiSelector.getPokemonList();
 
-				$(".modal .no").click(function(e){
-					closeModalWindow();
-				});
-			}
+                if (team.length < partySize) {
+                    modalWindow("Enter Full Team", $(".enter-full-team").first());
 
-			// Validate and add currently selected team
+                    return false;
+                } else if (team.length == partySize) {
+                    teams.push(team);
+                    $(".multi-selector").hide();
+                    $(".button.new-team").show();
 
-			function addNewTeam(e){
-				var team = multiSelector.getPokemonList();
+                    self.updateTeamList();
+                }
+            }
 
-				if(team.length < partySize){
-					modalWindow("Enter Full Team", $(".enter-full-team").first());
+            // Save changes to selected team
 
-					return false;
-				} else if(team.length == partySize){
-					teams.push(team);
-					$(".multi-selector").hide();
-					$(".button.new-team").show();
+            function editTeam(e) {
+                var team = multiSelector.getPokemonList();
 
-					self.updateTeamList();
-				}
-			}
+                if (team.length < partySize) {
+                    modalWindow("Enter Full Team", $(".enter-full-team").first());
 
-			// Save changes to selected team
+                    return false;
+                } else if (team.length == partySize) {
+                    teams[selectedTeamIndex] = team;
+                    $(".multi-selector").hide();
+                    $(".button.new-team").show();
 
-			function editTeam(e){
-				var team = multiSelector.getPokemonList();
+                    self.updateTeamList();
+                }
+            }
 
-				if(team.length < partySize){
-					modalWindow("Enter Full Team", $(".enter-full-team").first());
+            // Set a new battle CP
 
-					return false;
-				} else if(team.length == partySize){
-					teams[selectedTeamIndex] = team;
-					$(".multi-selector").hide();
-					$(".button.new-team").show();
+            function selectLeague(e) {
+                var cp = parseInt($(".league-select option:selected").val());
+                var levelCap = parseInt($(".league-select option:selected").attr("level-cap"));
 
-					self.updateTeamList();
-				}
-			}
+                battle.setCP(cp);
+                battle.setLevelCap(levelCap);
 
-			// Set a new battle CP
+                gm.loadRankingData(self, "overall", cp, "all");
+            }
 
-			function selectLeague(e){
-				var cp = parseInt($(".league-select option:selected").val());
-				var levelCap = parseInt($(".league-select option:selected").attr("level-cap"));
+            // Oh yeah, it's big brain copy + paste time
+            // Copy list text
 
-				battle.setCP(cp);
-				battle.setLevelCap(levelCap);
+            $(".training-editor-import .copy").click(function (e) {
+                var el = $(e.target).prev()[0];
+                el.focus();
+                el.setSelectionRange(0, el.value.length);
+                document.execCommand("copy");
+            });
 
-				gm.loadRankingData(self, "overall", cp, "all");
-			}
+            // Copy text to import
 
-			// Oh yeah, it's big brain copy + paste time
-			// Copy list text
+            $(".training-editor-import textarea.import").on("click", function (e) {
+                this.setSelectionRange(0, this.value.length);
+            });
 
-			$(".training-editor-import .copy").click(function(e){
-				var el = $(e.target).prev()[0];
-				el.focus();
-				el.setSelectionRange(0, el.value.length);
-				document.execCommand("copy");
-			});
+            // Open the save window
 
-			// Copy text to import
+            $(".team-fill-buttons .save-btn").click(function (e) {
+                if (!selectedTeamPool || $(e.target).hasClass("save-as")) {
+                    // Prompt to save a new group if a custom one isn't selected
+                    modalWindow("Save Team Pool", $(".save-pool").eq(0));
+                } else {
+                    self.saveTeamPool(selectedTeamPool.replace("team-pool-", ""), false);
+                }
+            });
 
-			$(".training-editor-import textarea.import").on("click", function(e){
-				this.setSelectionRange(0, this.value.length);
-			});
+            // Close the save window and save new group
 
-			// Open the save window
+            $("body").on("click", ".modal .button.save", function (e) {
+                self.saveTeamPool($(".modal input.list-name").val(), true);
 
-			$(".team-fill-buttons .save-btn").click(function(e){
+                closeModalWindow();
+            });
 
-				if((! selectedTeamPool)||($(e.target).hasClass("save-as"))){
-					// Prompt to save a new group if a custom one isn't selected
-					modalWindow("Save Team Pool", $(".save-pool").eq(0));
-				} else{
-					self.saveTeamPool(selectedTeamPool.replace("team-pool-",""), false);
-				}
+            // Load an existing group
 
-			});
+            $(".team-fill-select").change(function (e) {
+                var val = $(this).find("option:selected").val();
 
-			// Close the save window and save new group
+                // Create a new group
 
-			$("body").on("click", ".modal .button.save", function(e){
-				self.saveTeamPool($(".modal input.list-name").val(), true);
+                if (val == "new") {
+                    teams = [];
 
-				closeModalWindow();
-			});
+                    self.updateTeamList();
 
-			// Load an existing group
+                    // Show the save button
 
-			$(".team-fill-select").change(function(e){
-				var val = $(this).find("option:selected").val();
+                    $(".team-fill-buttons .save-as").hide();
+                    $(".team-fill-buttons .save-custom").show();
+                    $(".team-fill-buttons .delete-btn").hide();
 
-				// Create a new group
+                    selectedTeamPool = false;
+                } else {
+                    var data = window.localStorage.getItem(val);
+                    self.importTeams(JSON.parse(data));
 
-				if(val == "new"){
-					teams = [];
+                    // Show the save and delete buttons
 
-					self.updateTeamList();
+                    $(".team-fill-buttons .save-as").show();
+                    $(".team-fill-buttons .save-custom").show();
+                    $(".team-fill-buttons .delete-btn").show();
 
-					// Show the save button
+                    selectedTeamPool = val;
+                }
+            });
 
-					$(".team-fill-buttons .save-as").hide();
-					$(".team-fill-buttons .save-custom").show();
-					$(".team-fill-buttons .delete-btn").hide();
+            // Open the delete group window
 
-					selectedTeamPool = false;
-				} else{
-					var data = window.localStorage.getItem(val);
-					self.importTeams(JSON.parse(data));
+            $(".team-fill-buttons .delete-btn").click(function (e) {
+                var name = $(".team-fill-select option:selected").html();
 
-					// Show the save and delete buttons
+                modalWindow("Delete Group", $(".delete-list-confirm").first());
 
-					$(".team-fill-buttons .save-as").show();
-					$(".team-fill-buttons .save-custom").show();
-					$(".team-fill-buttons .delete-btn").show();
+                $(".modal .name").html(name);
 
-					selectedTeamPool = val;
-				}
-			});
+                // Trigger for deleting group cookie
 
-			// Open the delete group window
+                $(".modal .delete-list-confirm .button.yes").click(function (e) {
+                    window.localStorage.removeItem(selectedTeamPool);
 
-			$(".team-fill-buttons .delete-btn").click(function(e){
-				var name = $(".team-fill-select option:selected").html();
+                    closeModalWindow();
 
-				modalWindow("Delete Group", $(".delete-list-confirm").first());
+                    // Remove option from quick fill selects
 
-				$(".modal .name").html(name);
+                    $(".team-fill-select option[value='" + selectedTeamPool + "']").remove();
+                    $(".team-fill-select option").first().prop("selected", "selected");
+                    $(".team-fill-select").trigger("change");
+                });
+            });
+        }
 
+        // Turn checkboxes on and off
 
-				// Trigger for deleting group cookie
-
-				$(".modal .delete-list-confirm .button.yes").click(function(e){
-
-					window.localStorage.removeItem(selectedTeamPool);
-
-					closeModalWindow();
-
-					// Remove option from quick fill selects
-
-					$(".team-fill-select option[value='"+selectedTeamPool+"']").remove();
-					$(".team-fill-select option").first().prop("selected", "selected");
-					$(".team-fill-select").trigger("change");
-				});
-			});
-		}
-
-		// Turn checkboxes on and off
-
-		function checkBox(e){
-			$(this).toggleClass("on");
-			$(this).trigger("change");
-		}
+        function checkBox(e) {
+            $(this).toggleClass("on");
+            $(this).trigger("change");
+        }
 
         return object;
     }
@@ -456,6 +453,6 @@ var InterfaceMaster = (function () {
                 instance = createInstance();
             }
             return instance;
-        }
+        },
     };
 })();

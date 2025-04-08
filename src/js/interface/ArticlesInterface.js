@@ -1,105 +1,99 @@
 /*
-* Interface functionality for move list and explorer
-*/
+ * Interface functionality for move list and explorer
+ */
 
 var InterfaceMaster = (function () {
     var instance;
 
     function createInstance() {
-
-
         var object = new interfaceObject();
 
-		function interfaceObject(){
+        function interfaceObject() {
+            var self = this;
+            var data;
+            var gm = GameMaster.getInstance();
 
-			var self = this;
-			var data;
-			var gm = GameMaster.getInstance();
+            this.init = function () {
+                gm.loadArticleData(self.receiveArticleData);
 
-			this.init = function(){
+                window.addEventListener("popstate", function (e) {
+                    get = e.state;
+                    self.loadGetData();
+                });
+            };
 
-				gm.loadArticleData(self.receiveArticleData);
+            // Callback for loading article data
+            this.receiveArticleData = function (d) {
+                data = d;
 
-				window.addEventListener('popstate', function(e) {
-					get = e.state;
-					self.loadGetData();
-				});
-			};
+                // Display all articles or search if url parameter exists
+                if (!get) {
+                    self.displayArticles(data);
+                } else {
+                    $("input.article-search").val(get.tag);
+                    $("input.article-search").trigger("change");
+                }
+            };
 
-			// Callback for loading article data
-			this.receiveArticleData = function(d){
-				data = d;
+            // Display articles after article metadata is loaded
 
-				// Display all articles or search if url parameter exists
-				if(! get){
-					self.displayArticles(data);
-				} else{
-					$("input.article-search").val(get.tag);
-					$("input.article-search").trigger("change");
-				}
+            this.displayArticles = function (d) {
+                $(".section .articles").html("");
 
-			}
+                for (var i = 0; i < d.length; i++) {
+                    var $article = makeArticleItem(d[i]);
 
-			// Display articles after article metadata is loaded
+                    $(".section .articles").append($article);
+                }
+            };
 
-			this.displayArticles = function(d){
-				$(".section .articles").html("");
+            // Search for an article or tag
 
-				for(var i = 0; i < d.length; i++){
-					var $article = makeArticleItem(d[i]);
+            $("input.article-search").on("keyup change", function (e) {
+                var searchStr = $(this).val().toLowerCase().trim();
 
-					$(".section .articles").append($article);
-				}
-			}
+                // Remove hashtag from searches if present
+                searchStr = searchStr.replace(/\#/g, "");
 
-			// Search for an article or tag
+                // Iterate through all articles and produce a subset of matching articles
+                var matches = [];
 
-			$("input.article-search").on("keyup change", function(e){
-				var searchStr = $(this).val().toLowerCase().trim();
+                for (var i = 0; i < data.length; i++) {
+                    var article = data[i];
+                    var match = false;
 
-				// Remove hashtag from searches if present
-				searchStr = searchStr.replace(/\#/g, "");
+                    if (article.title.toLowerCase().indexOf(searchStr) > -1) {
+                        match = true;
+                    }
 
-				// Iterate through all articles and produce a subset of matching articles
-				var matches = [];
+                    for (var n = 0; n < article.tags.length; n++) {
+                        if (article.tags[n].toLowerCase().indexOf(searchStr) > -1) {
+                            match = true;
+                        }
+                    }
 
-				for(var i = 0; i < data.length; i++){
-					var article = data[i];
-					var match = false;
+                    if (match) {
+                        matches.push(article);
+                    }
+                }
 
-					if(article.title.toLowerCase().indexOf(searchStr) > -1){
-						match = true;
-					}
+                if (searchStr != "") {
+                    self.displayArticles(matches);
+                } else {
+                    self.displayArticles(data);
+                }
+            });
 
-					for(var n = 0; n < article.tags.length; n++){
-						if(article.tags[n].toLowerCase().indexOf(searchStr) > -1){
-							match = true;
-						}
-					}
+            // Turn checkboxes on and off
 
-					if(match){
-						matches.push(article);
-					}
-				}
+            function checkBox(e) {
+                $(this).toggleClass("on");
 
-				if(searchStr != ""){
-					self.displayArticles(matches);
-				} else{
-					self.displayArticles(data);
-				}
-			});
-
-			// Turn checkboxes on and off
-
-			function checkBox(e){
-				$(this).toggleClass("on");
-
-				if($(this).hasClass("stab")){
-					self.generateExploreResults(false);
-				}
-			}
-
-		}
+                if ($(this).hasClass("stab")) {
+                    self.generateExploreResults(false);
+                }
+            }
+        }
 
         return object;
     }
@@ -110,6 +104,6 @@ var InterfaceMaster = (function () {
                 instance = createInstance();
             }
             return instance;
-        }
+        },
     };
 })();

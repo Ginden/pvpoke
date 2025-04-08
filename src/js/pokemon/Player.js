@@ -1,196 +1,196 @@
 class Player {
-	/**
-	 * Represents a player in a battle
-	 * @param {number} index 
-	 * @param {any} aiType 
-	 * @param {Battle} battle 
-	 */
-	constructor(index, aiType, battle) {
-		this.index = index;
-		this.battle = battle;
-		
-		// Initialize AI
-		this.ai = aiType !== false ? new TrainingAI(aiType, this, battle) : false;
-		
-		// Arrays for Pokemon
-		this.team = []; // Pokemon in the battle
-		this.roster = []; // Full 6 Pokemon team
-		
-		// Battle properties
-		this.shields = 2;
-		this.switchTimer = 0;
-		this.switchTime = 50000;
-		this.wins = 0;
-		this.priority = index;
-	}
+    /**
+     * Represents a player in a battle
+     * @param {number} index
+     * @param {any} aiType
+     * @param {Battle} battle
+     */
+    constructor(index, aiType, battle) {
+        this.index = index;
+        this.battle = battle;
 
-	reset() {
-		this.shields = 2;
-		this.switchTimer = 0;
+        // Initialize AI
+        this.ai = aiType !== false ? new TrainingAI(aiType, this, battle) : false;
 
-		for (const pokemon of this.roster) {
-			pokemon.reset();
-		}
-	}
+        // Arrays for Pokemon
+        this.team = []; // Pokemon in the battle
+        this.roster = []; // Full 6 Pokemon team
 
-	getRoster() {
-		return this.roster;
-	}
+        // Battle properties
+        this.shields = 2;
+        this.switchTimer = 0;
+        this.switchTime = 50000;
+        this.wins = 0;
+        this.priority = index;
+    }
 
-	setRoster(val) {
-		this.roster = val;
+    reset() {
+        this.shields = 2;
+        this.switchTimer = 0;
 
-		// For team generation purposes, give each Pokemon 2 shields and fully reset
-		for (const pokemon of this.roster) {
-			pokemon.setShields(2);
-			pokemon.fullReset();
-		}
-	}
+        for (const pokemon of this.roster) {
+            pokemon.reset();
+        }
+    }
 
-	getTeam() {
-		return this.team;
-	}
+    getRoster() {
+        return this.roster;
+    }
 
-	setTeam(val) {
-		this.team = val;
+    setRoster(val) {
+        this.roster = val;
 
-		// Reset battle stats
-		for (const pokemon of this.team) {
-			pokemon.resetBattleStats();
-		}
-	}
+        // For team generation purposes, give each Pokemon 2 shields and fully reset
+        for (const pokemon of this.roster) {
+            pokemon.setShields(2);
+            pokemon.fullReset();
+        }
+    }
 
-	/**
-	 * Returns the number of shields remaining
-	 * @returns {0|1|2}
-	 */
-	getShields() {
-		return this.shields;
-	}
+    getTeam() {
+        return this.team;
+    }
 
-	/**
-	 * Attempts to use shield. Returns `true` if successful, otherwise returns `false`
-	 * @returns {boolean}
-	 */
-	useShield() {
-		if (this.shields > 0) {
-			this.shields--;
-			return true;
-		}
-		return false;
-	}
+    setTeam(val) {
+        this.team = val;
 
-	/**
-	 * Returns the current switch timer in milliseconds
-	 * @returns {number}
-	 */
-	getSwitchTimer() {
-		return this.switchTimer;
-	}
+        // Reset battle stats
+        for (const pokemon of this.team) {
+            pokemon.resetBattleStats();
+        }
+    }
 
-	/**
-	 * 
-	 * @param {number} val 
-	 */
-	setSwitchTime(val) {
-		this.switchTime = val;
-	}
+    /**
+     * Returns the number of shields remaining
+     * @returns {0|1|2}
+     */
+    getShields() {
+        return this.shields;
+    }
 
-	/**
-	 * Starts the switch timer
-	 */
-	startSwitchTimer() {
-		this.switchTimer = this.switchTime;
-	}
+    /**
+     * Attempts to use shield. Returns `true` if successful, otherwise returns `false`
+     * @returns {boolean}
+     */
+    useShield() {
+        if (this.shields > 0) {
+            this.shields--;
+            return true;
+        }
+        return false;
+    }
 
-	decrementSwitchTimer(deltaTime) {
-		// Evaluate the matchup when the switch clock completes
-		let evaluateMatchup = false;
-		if ((this.switchTimer <= deltaTime) && (this.switchTimer > 0)) {
-			evaluateMatchup = true;
-		}
+    /**
+     * Returns the current switch timer in milliseconds
+     * @returns {number}
+     */
+    getSwitchTimer() {
+        return this.switchTimer;
+    }
 
-		this.switchTimer = Math.max(this.switchTimer - deltaTime, 0);
+    /**
+     *
+     * @param {number} val
+     */
+    setSwitchTime(val) {
+        this.switchTime = val;
+    }
 
-		if ((this.index == 1) && evaluateMatchup) {
-			this.ai.evaluateMatchup(
-				this.battle.getTurns(),
-				this.battle.getPokemon()[1],
-				this.battle.getPokemon()[0],
-				this.battle.getPlayers()[0]
-			);
-		}
-	}
+    /**
+     * Starts the switch timer
+     */
+    startSwitchTimer() {
+        this.switchTimer = this.switchTime;
+    }
 
-	/**
-	 * Return the AI controlling this player
-	 * @returns {TrainingAI}
-	 */
-	getAI() {
-		return this.ai;
-	}
+    decrementSwitchTimer(deltaTime) {
+        // Evaluate the matchup when the switch clock completes
+        let evaluateMatchup = false;
+        if (this.switchTimer <= deltaTime && this.switchTimer > 0) {
+            evaluateMatchup = true;
+        }
 
-	/**
-	 * Return the player's index
-	 * @returns {number}
-	 */
-	getIndex() {
-		return this.index;
-	}
+        this.switchTimer = Math.max(this.switchTimer - deltaTime, 0);
 
-	/**
-	 * Returns this priority of the player
-	 * @returns {number}
-	 */
-	getPriority() {
-		return this.priority;
-	}
+        if (this.index == 1 && evaluateMatchup) {
+            this.ai.evaluateMatchup(
+                this.battle.getTurns(),
+                this.battle.getPokemon()[1],
+                this.battle.getPokemon()[0],
+                this.battle.getPlayers()[0],
+            );
+        }
+    }
 
-	/**
-	 * Sets the priority of the player
-	 * @param {number} val
-	 */
-	setPriority(val) {
-		this.priority = val;
-	}
+    /**
+     * Return the AI controlling this player
+     * @returns {TrainingAI}
+     */
+    getAI() {
+        return this.ai;
+    }
 
-	/**
-	 * Returns the number of remaining Pokemon
-	 * @returns {number}
-	 */
-	getRemainingPokemon() {
-		let count = 0;
+    /**
+     * Return the player's index
+     * @returns {number}
+     */
+    getIndex() {
+        return this.index;
+    }
 
-		for (const pokemon of this.team) {
-			if (pokemon.hp > 0) {
-				count++;
-			}
-		}
+    /**
+     * Returns this priority of the player
+     * @returns {number}
+     */
+    getPriority() {
+        return this.priority;
+    }
 
-		return count;
-	}
+    /**
+     * Sets the priority of the player
+     * @param {number} val
+     */
+    setPriority(val) {
+        this.priority = val;
+    }
 
-	/**
-	 * Generate a random roster for this player
-	 * @param {number} partySize
-	 * @param {Function} callback
-	 * @param {boolean} [customTeamPool=false]
-	 */
-	generateRoster(partySize, callback, customTeamPool = false) {
-		this.ai.generateRoster(partySize, callback, customTeamPool);
-	}
+    /**
+     * Returns the number of remaining Pokemon
+     * @returns {number}
+     */
+    getRemainingPokemon() {
+        let count = 0;
 
-	/**
-	 * Generate a team of 3 with an established roster
-	 * @param opponentRoster
-	 * @param {'win' | 'loss'} [previousResult]
-	 * @param previousTeams
-	 */
-	generateTeam(opponentRoster, previousResult, previousTeams) {
-		if (!previousResult) {
-			this.ai.generateTeam(opponentRoster);
-		} else {
-			this.ai.generateTeam(opponentRoster, previousResult, previousTeams);
-		}
-	}
+        for (const pokemon of this.team) {
+            if (pokemon.hp > 0) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    /**
+     * Generate a random roster for this player
+     * @param {number} partySize
+     * @param {Function} callback
+     * @param {boolean} [customTeamPool=false]
+     */
+    generateRoster(partySize, callback, customTeamPool = false) {
+        this.ai.generateRoster(partySize, callback, customTeamPool);
+    }
+
+    /**
+     * Generate a team of 3 with an established roster
+     * @param opponentRoster
+     * @param {'win' | 'loss'} [previousResult]
+     * @param previousTeams
+     */
+    generateTeam(opponentRoster, previousResult, previousTeams) {
+        if (!previousResult) {
+            this.ai.generateTeam(opponentRoster);
+        } else {
+            this.ai.generateTeam(opponentRoster, previousResult, previousTeams);
+        }
+    }
 }

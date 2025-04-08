@@ -4,101 +4,103 @@ var InterfaceMaster = (function () {
     var instance;
 
     function createInstance() {
-
-
         var object = new interfaceObject();
 
-		function interfaceObject(){
+        function interfaceObject() {
+            var battle;
+            var ranker = RankerMaster.getInstance();
+            var pokeSelectors = [];
+            var animating = false;
+            var self = this;
 
-			var battle;
-			var ranker = RankerMaster.getInstance();
-			var pokeSelectors = [];
-			var animating = false;
-			var self = this;
+            this.init = function () {
+                var data = GameMaster.getInstance().data;
 
-			this.init = function(){
+                $(".format-select").on("change", selectFormat);
+                $(".simulate").on("click", startRanker);
 
-				var data = GameMaster.getInstance().data;
+                battle = new Battle();
 
-				$(".format-select").on("change", selectFormat);
-				$(".simulate").on("click", startRanker);
+                // Load initial overrides
+                $.ajax({
+                    dataType: "json",
+                    url: webRoot + "data/overrides/all/1500.json?v=" + siteVersion,
+                    mimeType: "application/json",
+                    success: function (data) {
+                        if (ranker.setMoveOverrides) {
+                            ranker.setMoveOverrides(1500, "all", data);
+                            console.log("Ranking overrides loaded [" + data.length + "]");
+                        }
+                    },
+                    error: function (request, error) {
+                        console.log("Request: " + JSON.stringify(request));
+                        console.log(error);
+                    },
+                });
 
-				battle = new Battle();
+                self.loadGetData();
+            };
 
-				// Load initial overrides
-				$.ajax({
-					dataType: "json",
-					url: webRoot + "data/overrides/all/1500.json?v=" + siteVersion,
-					mimeType: "application/json",
-					success: function(data) {
-						if (ranker.setMoveOverrides) {
-							ranker.setMoveOverrides(1500, "all", data);
-							console.log("Ranking overrides loaded [" + data.length + "]");
-						}
-					},
-					error: function(request, error) {
-						console.log("Request: " + JSON.stringify(request));
-						console.log(error);
-					}
-				});
+            // Given JSON of get parameters, load these settings
 
-				self.loadGetData();
+            this.loadGetData = function () {
+                if (!get) {
+                    return false;
+                }
 
-			};
+                $(".format-select option[cup='" + get["cup"] + "'][value=" + get["cp"] + "]").prop(
+                    "selected",
+                    "selected",
+                );
 
-			// Given JSON of get parameters, load these settings
+                $(".format-select").trigger("change");
+            };
 
-			this.loadGetData = function(){
+            // Event handler for changing the league select
 
-				if(! get){
-					return false;
-				}
+            function selectFormat(e) {
+                var cp = $(".format-select option:selected").val();
+                var cup = $(".format-select option:selected").attr("cup");
 
-				$(".format-select option[cup='"+get["cup"]+"'][value="+get["cp"]+"]").prop("selected", "selected");
+                battle.setCP(cp);
+                battle.setCup(cup);
 
-				$(".format-select").trigger("change");
-			}
+                if (!battle.getCup().levelCap) {
+                    battle.setLevelCap(50);
+                }
 
-			// Event handler for changing the league select
+                loadOverrides();
 
-			function selectFormat(e){
-				var cp = $(".format-select option:selected").val();
-				var cup = $(".format-select option:selected").attr("cup");
+                $("a.rankersandbox-link").attr("href", webRoot + "rankersandbox.php?cup=" + cup + "&cp=" + cp);
+                $("a.rankings-link").attr("href", webRoot + "rankings/" + cup + "/" + cp + "/overall/");
+            }
 
-				battle.setCP(cp);
-				battle.setCup(cup);
+            // Load overrides for the currently selected league and cup
 
-				if(! battle.getCup().levelCap){
-					battle.setLevelCap(50);
-				}
+            function loadOverrides() {
+                var file =
+                    webRoot +
+                    "data/overrides/" +
+                    battle.getCup().name +
+                    "/" +
+                    battle.getCP() +
+                    ".json?v=" +
+                    siteVersion;
 
-				loadOverrides();
+                $.getJSON(file, function (data) {
+                    if (ranker.setMoveOverrides) {
+                        ranker.setMoveOverrides(battle.getCP(), battle.getCup().name, data);
+                        console.log("Ranking overrides loaded [" + data.length + "]");
+                    }
+                });
+            }
 
-				$("a.rankersandbox-link").attr("href", webRoot+"rankersandbox.php?cup="+cup+"&cp="+cp);
-				$("a.rankings-link").attr("href", webRoot+"rankings/"+cup+"/"+cp+"/overall/");
-			}
+            // Run simulation
 
-			// Load overrides for the currently selected league and cup
-
-			function loadOverrides(){
-
-				var file = webRoot+"data/overrides/"+battle.getCup().name+"/"+battle.getCP()+".json?v="+siteVersion;
-
-				$.getJSON( file, function( data ){
-					if(ranker.setMoveOverrides){
-						ranker.setMoveOverrides(battle.getCP(), battle.getCup().name, data);
-						console.log("Ranking overrides loaded [" + data.length + "]");
-					}
-				});
-
-			}
-
-			// Run simulation
-
-			function startRanker(){
-				ranker.rankLoop(battle.getCP(), battle.getCup());
-			}
-		};
+            function startRanker() {
+                ranker.rankLoop(battle.getCP(), battle.getCup());
+            }
+        }
 
         return object;
     }
@@ -109,6 +111,6 @@ var InterfaceMaster = (function () {
                 instance = createInstance();
             }
             return instance;
-        }
+        },
     };
 })();

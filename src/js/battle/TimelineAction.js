@@ -8,75 +8,75 @@
  */
 
 class TimelineAction {
-	/**
-	 * @type {TimelineActionType}
-	 */
-	type;
+    /**
+     * @type {TimelineActionType}
+     */
+    type;
 
-	actor;
+    actor;
 
-	/**
-	 * @type {number}
-	 */
-	turn;
+    /**
+     * @type {number}
+     */
+    turn;
 
-	/**
-	 * Index of charged move to use
-	 * @type {number}
-	 */
-	value;
+    /**
+     * Index of charged move to use
+     * @type {number}
+     */
+    value;
 
-	/**
-	 * @type {any}
-	 */
+    /**
+     * @type {any}
+     */
 
-	settings;
+    settings;
 
-	/**
-	 * @type {boolean}
-	 */
-	processed;
+    /**
+     * @type {boolean}
+     */
+    processed;
 
-	/**
-	 * Whether this action has been processed yet or not
-	 * @type {boolean}
-	 */
-	valid;
+    /**
+     * Whether this action has been processed yet or not
+     * @type {boolean}
+     */
+    valid;
 
-	/**
-	 *
-	 * @param {TimelineActionType} type
-	 * @param actor
-	 * @param {number} turn
-	 * @param {number} value
-	 * @param {any} settings
-	 */
-	constructor(type, actor, turn, value, settings) {
-		this.type = type;
-		this.actor = actor;
-		this.turn = turn;
-		this.value = value;
-		this.settings = settings;
-		this.valid = false;
-		this.processed = false;
-	}
+    /**
+     *
+     * @param {TimelineActionType} type
+     * @param actor
+     * @param {number} turn
+     * @param {number} value
+     * @param {any} settings
+     */
+    constructor(type, actor, turn, value, settings) {
+        this.type = type;
+        this.actor = actor;
+        this.turn = turn;
+        this.value = value;
+        this.settings = settings;
+        this.valid = false;
+        this.processed = false;
+    }
 
-	/**
-	 * Converts the type to an integer
-	 * @returns {0|1|2}
-	 */
-	typeToInt() {
-		switch (this.type) {
-			case "fast":
-			case "charged":
-				return 1;
-				break;
+    /**
+     * Converts the type to an integer
+     * @returns {0|1|2}
+     */
+    typeToInt() {
+        switch (this.type) {
+            case "fast":
+            case "charged":
+                return 1;
+                break;
 
-			case "wait":
-				return 2;
-				break;
-		}
+            case "wait":
+                return 2;
+                break;
+        }
 
-		return 0;
-	}
+        return 0;
+    }
 }
