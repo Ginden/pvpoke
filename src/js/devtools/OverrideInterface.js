@@ -4,392 +4,407 @@ var InterfaceMaster = (function () {
     var instance;
 
     function createInstance() {
-
-
         var object = new interfaceObject();
 
-		function interfaceObject(){
+        function interfaceObject() {
+            var self = this;
+            var data;
+            var gm = GameMaster.getInstance();
+            var context = "overrides"; // Used for internal reference
+            var battle = new Battle();
 
-			var self = this;
-			var data;
-			var gm = GameMaster.getInstance();
-			var context = "overrides"; // Used for internal reference
-			var battle = new Battle();
+            var selectedPokemonIndex = -1;
 
-			var selectedPokemonIndex = -1;
+            var sort = "id";
 
-			var sort = "id";
+            this.context = "rankings"; // Used for external reference
 
-			this.context = "rankings"; // Used for external reference
+            this.init = function () {
+                self.loadOverrides(1500, "all");
 
-			this.init = function(){
+                $(".format-select").on("change", selectFormat);
+                $("body").on("click", ".check", checkBox);
 
-				self.loadOverrides(1500, "all");
+                pokeSearch.setBattle(battle);
+            };
 
-				$(".format-select").on("change", selectFormat);
-				$("body").on("click", ".check", checkBox);
+            // Grabs ranking data from the Game Master
 
-				pokeSearch.setBattle(battle);
-			};
+            this.loadOverrides = function (league, cup) {
+                $(".rankings-container").html("");
+                $(".loading").show();
 
-			// Grabs ranking data from the Game Master
+                battle.setCup(cup);
+                battle.setCP(league);
 
-			this.loadOverrides = function(league, cup){
-				$(".rankings-container").html('');
-				$(".loading").show();
+                if (!battle.getCup().levelCap) {
+                    battle.setLevelCap(50);
+                }
 
-				battle.setCup(cup);
-				battle.setCP(league);
+                gm.loadRankingData(self, "overall", league, cup);
 
-				if(! battle.getCup().levelCap){
-					battle.setLevelCap(50);
-				}
-
-
-				gm.loadRankingData(self, "overall", league, cup);
-
-				/* This timeout allows the interface to display the loading message before
+                /* This timeout allows the interface to display the loading message before
 				being thrown into the data loading loop */
 
-				setTimeout(function(){
-					$.getJSON( webRoot+"data/overrides/"+cup+"/"+league+".json?v="+siteVersion, function( data ){
-						self.displayOverrideData(data);
-					});
-				}, 50);
+                setTimeout(function () {
+                    $.getJSON(
+                        webRoot + "data/overrides/" + cup + "/" + league + ".json?v=" + siteVersion,
+                        function (data) {
+                            self.displayOverrideData(data);
+                        },
+                    );
+                }, 50);
+            };
+
+            // Displays the grabbed data. Showoff.
+
+            this.displayOverrideData = function (rankings) {
+                data = rankings;
+
+                // Assign weightings
+                for (var i = 0; i < rankings.length; i++) {
+                    if (typeof rankings[i].weight == "undefined") {
+                        rankings[i].weight = 1;
+                    }
+                }
+
+                this.sortOverrideData();
+
+                // Create an element for each ranked Pokemon
+                $(".rankings-container").html("");
+
+                for (var i = 0; i < rankings.length; i++) {
+                    var r = rankings[i];
+
+                    var pokemon = new Pokemon(r.speciesId, 0, battle);
+
+                    if (!pokemon.speciesId) {
+                        rankings.splice(i, 1);
+                        i--;
+                        continue;
+                    }
+
+                    pokemon.initialize(true);
+
+                    if (!pokemon.speciesId) {
+                        continue;
+                    }
+
+                    // Get names of of ranking moves
+                    var displayedMoves = [];
+
+                    if (r.fastMove) {
+                        pokemon.selectMove("fast", r.fastMove);
+                        displayedMoves.push(pokemon.fastMove.name);
+                    }
+
+                    if (r.chargedMoves) {
+                        for (var n = 0; n < r.chargedMoves.length; n++) {
+                            pokemon.selectMove("charged", r.chargedMoves[n], n);
+                            displayedMoves.push(pokemon.chargedMoves[n].name);
+                        }
+                    }
+
+                    var moveNameStr = displayedMoves.join(", ");
+                    var displayWeight = 1;
+
+                    if (typeof r.weight !== "undefined") {
+                        displayWeight = r.weight;
+                    }
+
+                    // Is this the best way to add HTML content? I'm gonna go with no here. But does it work? Yes!
+
+                    var $el = $(
+                        '<div class="rank ' +
+                            pokemon.types[0] +
+                            '" type-1="' +
+                            pokemon.types[0] +
+                            '" type-2="' +
+                            pokemon.types[1] +
+                            '" data="' +
+                            pokemon.speciesId +
+                            '"><div class="name-container"><span class="name">' +
+                            pokemon.speciesName +
+                            '</span><div class="moves">' +
+                            moveNameStr +
+                            '</div></div><div class="rating-container"><div class="rating">x' +
+                            displayWeight +
+                            '</div><div class="clear"></div></div><div class="details"></div>',
+                    );
+
+                    $(".section.white > .rankings-container").append($el);
+
+                    // Determine XL category
+
+                    if (pokemon.needsXLCandy()) {
+                        $el.find(".name").append('<span class="xl-info-icon">XL</span>');
+                    }
+                }
+
+                $(".loading").hide();
+                $(".rank").on("click", selectPokemon);
+
+                // If search string exists, process it
 
-			}
+                if ($(".poke-search").first().val() != "") {
+                    $(".poke-search").first().trigger("keyup");
+                }
 
-			// Displays the grabbed data. Showoff.
+                var json = JSON.stringify(data);
 
-			this.displayOverrideData = function(rankings){
-				data = rankings;
+                $("textarea.import").html(json);
+            };
 
-				// Assign weightings
-				for(var i = 0; i < rankings.length; i++){
-					if(typeof rankings[i].weight == 'undefined'){
-						rankings[i].weight = 1;
-					}
-				}
+            // Sorty alphabetically or by weight
+            this.sortOverrideData = function () {
+                if (sort == "id") {
+                    data.sort((a, b) => (a.speciesId > b.speciesId ? 1 : b.speciesId > a.speciesId ? -1 : 0));
+                } else if (sort == "weight") {
+                    data.sort((a, b) => (a.weight > b.weight ? -1 : b.weight > a.weight ? 1 : 0));
+                }
+            };
 
-				this.sortOverrideData();
+            this.openPokeSelect = function (pokemon) {
+                modalWindow("Select Pokemon", $(".poke.single").first());
 
-				// Create an element for each ranked Pokemon
-				$(".rankings-container").html('');
+                pokeSelector = new PokeSelect($(".modal .poke"), 1);
+                pokeSelector.setContext("modal" + context);
+                pokeSelector.init(gm.data.pokemon, battle);
 
-				for(var i = 0; i < rankings.length; i++){
-					var r = rankings[i];
+                if (!pokemon) {
+                    // New Pokemon
 
-					var pokemon = new Pokemon(r.speciesId, 0, battle);
+                    pokeSelector.clear();
 
-					if(! pokemon.speciesId){
-						rankings.splice(i, 1);
-						i--;
-						continue;
-					}
+                    $(".modal-content").append(
+                        '<div class="center"><div class="save-poke button">Add Pokemon</div></div>',
+                    );
 
-					pokemon.initialize(true);
+                    $(".modal .poke-search").focus();
 
-					if(! pokemon.speciesId){
-						continue;
-					}
+                    selectedPokemonIndex = -1;
+                } else {
+                    // Edit existing Pokemon
 
-					// Get names of of ranking moves
-					var displayedMoves = [];
+                    pokeSelector.setSelectedPokemon(pokemon);
 
-					if(r.fastMove){
-						pokemon.selectMove("fast", r.fastMove);
-						displayedMoves.push(pokemon.fastMove.name);
-					}
+                    $(".modal-content").append(
+                        '<div class="center"><div class="save-poke button">Save Changes</div></div>',
+                    );
+                }
 
-					if(r.chargedMoves){
-						for(var n = 0; n < r.chargedMoves.length; n++){
-							pokemon.selectMove("charged", r.chargedMoves[n], n);
-							displayedMoves.push(pokemon.chargedMoves[n].name);
-						}
-					}
+                // Show custom rankings options for moveset overrides
+                $(".modal .poke .custom-ranking-options").show();
 
-					var moveNameStr = displayedMoves.join(", ");
-					var displayWeight = 1;
+                // Add or save a Pokemon in the Pokemon list
 
-					if(typeof r.weight !== 'undefined'){
-						displayWeight = r.weight;
-					}
+                $(".modal .save-poke").on("click", function (e) {
+                    // Make sure something's selected
+                    if (!pokeSelector) {
+                        return false;
+                    }
 
-					// Is this the best way to add HTML content? I'm gonna go with no here. But does it work? Yes!
+                    var pokemon = pokeSelector.getPokemon();
 
-					var $el = $("<div class=\"rank " + pokemon.types[0] + "\" type-1=\""+pokemon.types[0]+"\" type-2=\""+pokemon.types[1]+"\" data=\""+pokemon.speciesId+"\"><div class=\"name-container\"><span class=\"name\">"+pokemon.speciesName+"</span><div class=\"moves\">"+moveNameStr+"</div></div><div class=\"rating-container\"><div class=\"rating\">x"+displayWeight+"</div><div class=\"clear\"></div></div><div class=\"details\"></div>");
+                    if (!pokemon) {
+                        return false;
+                    }
 
-					$(".section.white > .rankings-container").append($el);
+                    if (selectedPokemonIndex > -1) {
+                        data[selectedPokemonIndex] = self.overrideFromPokemon(pokemon);
+                    } else {
+                        data.push(self.overrideFromPokemon(pokemon));
+                    }
 
-					// Determine XL category
+                    closeModalWindow();
 
-					if(pokemon.needsXLCandy()){
-						$el.find(".name").append("<span class=\"xl-info-icon\">XL</span>");
-					}
-				}
+                    self.displayOverrideData(data);
+                });
+            };
 
-				$(".loading").hide();
-				$(".rank").on("click", selectPokemon);
+            this.overrideFromPokemon = function (pokemon) {
+                var speciesId = pokemon.speciesId;
 
-				// If search string exists, process it
+                if (pokemon.shadowType == "shadow") {
+                    speciesId += "_shadow";
+                }
 
-				if($(".poke-search").first().val() != ''){
-					$(".poke-search").first().trigger("keyup");
-				}
+                var override = {
+                    speciesId: pokemon.speciesId,
+                    fastMove: pokemon.fastMove.moveId,
+                    chargedMoves: [],
+                    weight: pokemon.rankingWeight,
+                };
 
-				var json = JSON.stringify(data);
+                for (var i = 0; i < pokemon.chargedMoves.length; i++) {
+                    override.chargedMoves.push(pokemon.chargedMoves[i].moveId);
+                }
 
-				$("textarea.import").html(json);
-			}
+                return override;
+            };
 
-			// Sorty alphabetically or by weight
-			this.sortOverrideData = function(){
-				if(sort == "id"){
-					data.sort((a,b) => (a.speciesId > b.speciesId) ? 1 : ((b.speciesId > a.speciesId) ? -1 : 0));
-				} else if(sort == "weight"){
-					data.sort((a,b) => (a.weight > b.weight) ? -1 : ((b.weight > a.weight) ? 1 : 0));
-				}
-			}
+            // Open Pokeselect on enter press for searchbar
 
-			this.openPokeSelect = function(pokemon){
-				modalWindow("Select Pokemon", $(".poke.single").first());
+            $(".poke-search")
+                .first()
+                .keypress(function (e) {
+                    if (e.which == 13) {
+                        // Open Pokeselect for first visible Pokemon
+                        var $rankings = $(".rankings-container .rank:visible");
 
-				pokeSelector = new PokeSelect($(".modal .poke"), 1);
-				pokeSelector.setContext("modal"+context);
-				pokeSelector.init(gm.data.pokemon, battle);
+                        if ($rankings.length > 0) {
+                            $rankings.first().trigger("click");
+                        } else {
+                            self.openPokeSelect();
 
-				if(! pokemon){
-					// New Pokemon
+                            $(".modal .poke-search").val($(this).val());
+                        }
+                    }
+                });
 
-					pokeSelector.clear();
+            // Event handler for changing the cup select
 
-					$(".modal-content").append("<div class=\"center\"><div class=\"save-poke button\">Add Pokemon</div></div>");
+            function selectFormat(e) {
+                var cp = $(".format-select option:selected").val();
+                var cup = $(".format-select option:selected").attr("cup");
 
-					$(".modal .poke-search").focus();
+                self.loadOverrides(cp, cup);
+            }
 
-					selectedPokemonIndex = -1;
-				} else{
+            // Event handler clicking on a Pokemon item, load detail data
 
-					// Edit existing Pokemon
+            function selectPokemon(e) {
+                var cup = $(".format-select option:selected").attr("cup");
+                var category = $(".ranking-categories a.selected").attr("data");
+                var $rank = $(this).closest(".rank");
 
-					pokeSelector.setSelectedPokemon(pokemon);
+                selectedPokemonIndex = $($rank).index(".rank");
 
-					$(".modal-content").append("<div class=\"center\"><div class=\"save-poke button\">Save Changes</div></div>");
-				}
+                var r = data[selectedPokemonIndex];
 
-				// Show custom rankings options for moveset overrides
-				$(".modal .poke .custom-ranking-options").show();
+                var pokemon = new Pokemon(r.speciesId, 0, battle);
 
-				// Add or save a Pokemon in the Pokemon list
+                pokemon.initialize(true);
+                pokemon.selectRecommendedMoveset();
 
-				$(".modal .save-poke").on("click", function(e){
+                if (r.fastMove) {
+                    pokemon.selectMove("fast", r.fastMove);
+                }
 
-					// Make sure something's selected
-					if(! pokeSelector){
-						return false;
-					}
+                if (r.chargedMoves) {
+                    for (var n = 0; n < r.chargedMoves.length; n++) {
+                        pokemon.selectMove("charged", r.chargedMoves[n], n);
+                    }
+                }
 
-					var pokemon = pokeSelector.getPokemon();
+                if (typeof r.weight !== "undefined") {
+                    pokemon.rankingWeight = r.weight;
+                }
 
-					if(! pokemon){
-						return false;
-					}
+                self.openPokeSelect(pokemon);
+            }
 
-					if(selectedPokemonIndex > -1){
-						data[selectedPokemonIndex] = self.overrideFromPokemon(pokemon);
-					} else{
-						data.push(self.overrideFromPokemon(pokemon));
-					}
+            // Turn checkboxes on and off
 
-					closeModalWindow();
+            function checkBox(e) {
+                $(this).toggleClass("on");
+                $(this).trigger("stateChange");
+            }
 
-					self.displayOverrideData(data);
+            $("button.toggle-sort").click(function (e) {
+                if (sort == "id") {
+                    sort = "weight";
+                } else if (sort == "weight") {
+                    sort = "id";
+                }
 
-				});
-			}
+                $("button.toggle-sort").html("Sort: " + sort);
 
-			this.overrideFromPokemon = function(pokemon){
-				var speciesId = pokemon.speciesId;
+                self.sortOverrideData();
+                self.displayOverrideData(data);
 
-				if(pokemon.shadowType == "shadow"){
-					speciesId += "_shadow";
-				}
+                $(".rankings-container").scrollTop(0);
+            });
 
-				var override = {
-					speciesId: pokemon.speciesId,
-					fastMove: pokemon.fastMove.moveId,
-					chargedMoves: [],
-					weight: pokemon.rankingWeight
-				};
+            $("button.new-pokemon").click(function (e) {
+                self.openPokeSelect();
+            });
 
-				for(var i = 0; i < pokemon.chargedMoves.length; i++){
-					override.chargedMoves.push(pokemon.chargedMoves[i].moveId);
-				}
+            // Clear all weightings from the overrides
 
-				return override;
-			}
+            $(".clear-weights").click(function (e) {
+                for (var i = 0; i < data.length; i++) {
+                    delete data[i].weight;
+                }
 
-			// Open Pokeselect on enter press for searchbar
+                self.displayOverrideData(data);
+            });
 
-			$(".poke-search").first().keypress(function(e){
-				if(e.which == 13){
-					// Open Pokeselect for first visible Pokemon
-					var $rankings = $(".rankings-container .rank:visible");
+            // Import movesets for all eligible Pokemon from the open league rankings
 
-					if($rankings.length > 0){
-						$rankings.first().trigger("click");
-					} else{
-						self.openPokeSelect();
+            $(".import-movesets").click(function (e) {
+                var data = [];
 
-						$(".modal .poke-search").val($(this).val());
-					}
-				}
-			})
+                var rankings = [];
+                var cup = battle.getCup();
 
-			// Event handler for changing the cup select
+                var key = "all" + "overall" + battle.getCP();
 
-			function selectFormat(e){
-				var cp = $(".format-select option:selected").val();
-				var cup = $(".format-select option:selected").attr("cup");
+                if (gm.rankings[key]) {
+                    rankings = [gm.rankings[key]][0]; // Wrapped in an array for weird reasons
+                }
 
-				self.loadOverrides(cp, cup);
-			}
+                var eligiblePokemon = gm.generateFilteredPokemonList(battle, cup.include, cup.exclude);
 
-			// Event handler clicking on a Pokemon item, load detail data
+                for (var i = 0; i < rankings.length; i++) {
+                    var r = rankings[i];
+                    var isEligible = false;
 
-			function selectPokemon(e){
+                    for (var n = 0; n < eligiblePokemon.length; n++) {
+                        if (eligiblePokemon[n].speciesId == r.speciesId) {
+                            isEligible = true;
+                            break;
+                        }
+                    }
 
-				var cup = $(".format-select option:selected").attr("cup");
-				var category = $(".ranking-categories a.selected").attr("data");
-				var $rank = $(this).closest(".rank");
+                    if (isEligible) {
+                        var override = {
+                            speciesId: r.speciesId,
+                            fastMove: r.moveset[0],
+                            chargedMoves: [],
+                        };
 
-				selectedPokemonIndex = $($rank).index(".rank");
+                        for (var n = 1; n < r.moveset.length; n++) {
+                            override.chargedMoves.push(r.moveset[n]);
+                        }
 
-				var r = data[selectedPokemonIndex];
+                        data.push(override);
+                    }
+                }
 
-				var pokemon = new Pokemon(r.speciesId, 0, battle);
+                self.sortOverrideData();
+                self.displayOverrideData(data);
+            });
 
-				pokemon.initialize(true);
-				pokemon.selectRecommendedMoveset();
+            // Copy overrides to clipboard
 
-				if(r.fastMove){
-					pokemon.selectMove("fast", r.fastMove);
-				}
+            $(".export-json").click(function (e) {
+                e.preventDefault();
 
-				if(r.chargedMoves){
-					for(var n = 0; n < r.chargedMoves.length; n++){
-						pokemon.selectMove("charged", r.chargedMoves[n], n);
-					}
-				}
+                var el = $(e.target).prev()[0];
+                el.focus();
+                el.setSelectionRange(0, el.value.length);
+                document.execCommand("copy");
+            });
 
-				if(typeof r.weight !== 'undefined'){
-					pokemon.rankingWeight = r.weight;
-				}
+            // Open a link to the ranker in a new tab
 
-				self.openPokeSelect(pokemon);
-			}
+            $("a.ranker-link").click(function (e) {
+                e.preventDefault();
 
-			// Turn checkboxes on and off
-
-			function checkBox(e){
-				$(this).toggleClass("on");
-				$(this).trigger("stateChange");
-			}
-
-			$("button.toggle-sort").click(function(e){
-				if(sort == "id"){
-					sort = "weight";
-				} else if(sort == "weight"){
-					sort = "id";
-				}
-
-				$("button.toggle-sort").html("Sort: " + sort);
-
-				self.sortOverrideData();
-				self.displayOverrideData(data);
-
-				$(".rankings-container").scrollTop(0);
-			});
-
-			$("button.new-pokemon").click(function(e){
-				self.openPokeSelect();
-			});
-
-			// Clear all weightings from the overrides
-
-			$(".clear-weights").click(function(e){
-				for(var i = 0; i < data.length; i++){
-					delete data[i].weight;
-				}
-
-				self.displayOverrideData(data);
-			});
-
-			// Import movesets for all eligible Pokemon from the open league rankings
-
-			$(".import-movesets").click(function(e){
-				var data = [];
-
-				var rankings = [];
-				var cup = battle.getCup();
-
-				var key = "all" + "overall" + battle.getCP();
-
-				if(gm.rankings[key]){
-					rankings = [gm.rankings[key]][0]; // Wrapped in an array for weird reasons
-				}
-
-				var eligiblePokemon = gm.generateFilteredPokemonList(battle, cup.include, cup.exclude);
-
-				for(var i = 0; i < rankings.length; i++){
-					var r = rankings[i];
-					var isEligible = false;
-
-					for(var n = 0; n < eligiblePokemon.length; n++){
-						if(eligiblePokemon[n].speciesId == r.speciesId){
-							isEligible = true;
-							break;
-						}
-					}
-
-					if(isEligible){
-						var override = {
-							speciesId: r.speciesId,
-							fastMove: r.moveset[0],
-							chargedMoves: []
-						};
-
-						for(var n = 1; n < r.moveset.length; n++){
-							override.chargedMoves.push(r.moveset[n]);
-						}
-
-						data.push(override);
-					}
-				}
-
-				self.sortOverrideData();
-				self.displayOverrideData(data);
-			});
-
-			// Copy overrides to clipboard
-
-			$(".export-json").click(function(e){
-				e.preventDefault();
-
-				var el = $(e.target).prev()[0];
-				el.focus();
-				el.setSelectionRange(0, el.value.length);
-				document.execCommand("copy");
-			});
-
-			// Open a link to the ranker in a new tab
-
-			$("a.ranker-link").click(function(e){
-				e.preventDefault();
-
-				window.open(webRoot + 'ranker.php?cup=' + battle.getCup().name + '&cp=' + battle.getCP(), '_blank');
-			});
-		};
+                window.open(webRoot + "ranker.php?cup=" + battle.getCup().name + "&cp=" + battle.getCP(), "_blank");
+            });
+        }
 
         return object;
     }
@@ -400,6 +415,6 @@ var InterfaceMaster = (function () {
                 instance = createInstance();
             }
             return instance;
-        }
+        },
     };
 })();

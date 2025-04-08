@@ -83,3 +83,12 @@ I appreciate your understanding if a request is rejected. A rejection doesn’t 
 And of course, you can always fork the project and develop whatever you’d like. Thanks for reading!
 
 -Empoleon_Dynamite
+
+## Prettier
+
+This project uses [Prettier](https://prettier.io/) for code formatting. To format the code, run the following command:
+
+```bash
+npx prettier --write "src/**/*.js"
+```
+

@@ -1,21 +1,20 @@
 // JavaScript Document
 
-function Main(){
+function Main() {
+    var interface;
+    var gm;
+    var rss;
 
-	var interface;
-	var gm;
-	var rss;
+    init();
 
-	init();
+    function init() {
+        gm = GameMaster.getInstance();
+        rss = RSS.getInstance();
+    }
 
-	function init(){
-		gm = GameMaster.getInstance();
-		rss = RSS.getInstance();
-	}
-
-	this.getGM = function(){
-		return gm;
-	}
+    this.getGM = function () {
+        return gm;
+    };
 }
 
 var main = new Main();
